@@ -17,6 +17,7 @@ dependencies = [
   "jinja2>=3.1",
   "joblib>=1.4",          # semantic-space artifact cache
   "json5>=0.9",           # embedded Lattes `var curriculo` objects are not strict JSON
+  "matplotlib>=3.8",  # report figures
   "numpy>=1.26",
   "pandas>=2.2",
   "playwright>=1.48",

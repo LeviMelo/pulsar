@@ -184,6 +184,18 @@ def doctor() -> None:
 
 
 @app.command()
+def report(
+    out: Optional[Path] = typer.Option(None, "--out", help="Output directory"),
+    no_pdf: bool = typer.Option(False, "--no-pdf", help="Write only the HTML"),
+) -> None:
+    """Generate the analytical report on the corpus and the retrieval evaluation."""
+    config, db = ctx()
+    from .report import build_report
+    result = build_report(config, db, out, pdf=not no_pdf, log=console.print)
+    console.print({k: str(v) for k, v in result.items()})
+
+
+@app.command()
 def dashboard(port: int = typer.Option(8501, "--port")) -> None:
     """Launch the local Streamlit operator console."""
     config, _ = ctx()
