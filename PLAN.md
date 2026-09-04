@@ -128,7 +128,9 @@ sent; a message marked `sent` is never re-sent; `campaign send` without
 `--confirm` is a dry run that prints what would go out.
 
 **Secrets** never enter source control. `config/default.toml` declares the *names*
-of environment variables; values live in the environment or `.env`. Personal but
+of environment variables; values live in the environment or in a git-ignored
+`.env`, which `AppConfig.load` reads from the project root (a variable already
+set in the shell always wins over the file). Personal but
 non-secret settings — the address you send from — go in the git-ignored
 `config/local.toml`, which is deep-merged over the tracked defaults so a shared
 file never carries one operator's identity.

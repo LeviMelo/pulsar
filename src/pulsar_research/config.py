@@ -61,6 +61,7 @@ class AppConfig:
     @classmethod
     def load(cls, root: Path | str | None = None) -> "AppConfig":
         root_path = discover_root(root)
+        load_dotenv(root_path)
         cfg_path = root_path / "config" / "default.toml"
         if not cfg_path.exists():
             raise FileNotFoundError(
@@ -138,6 +139,38 @@ def discover_root(root: Path | str | None = None) -> Path:
         if (candidate / "config" / "default.toml").exists() and (candidate / "pyproject.toml").exists():
             return candidate
     return current
+
+
+def load_dotenv(root: Path) -> dict[str, str]:
+    """Load `.env` from the project root into the environment, if present.
+
+    Written by hand rather than pulling in python-dotenv: PULSAR needs about
+    fifteen lines of it. A variable already set in the real environment always
+    wins, so `$env:X=...` in one shell still overrides the file.
+
+    Returns the names it set, for diagnostics. Never logs a value.
+    """
+    path = Path(root) / ".env"
+    applied: dict[str, str] = {}
+    if not path.exists():
+        return applied
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].lstrip()
+        key, sep, value = line.partition("=")
+        key = key.strip()
+        if not sep or not key:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        if key not in os.environ:
+            os.environ[key] = value
+            applied[key] = "set"
+    return applied
 
 
 def env_secret(name: str) -> str:
