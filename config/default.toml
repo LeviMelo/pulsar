@@ -1,10 +1,14 @@
+# PULSAR operator configuration.
+# Secrets never live here — only environment-variable *names*.
+
 [paths]
 data_dir = "data"
 database = "data/pulsar.duckdb"
 public_dataset_dir = "data/public_sigaa"
-legacy_ledger_json = "projects_ledger.json"
-legacy_ledger_csv = "projects_ledger.csv"
-professors_csv = "professores_ufal.csv"
+state_dir = "data/state"
+opportunity_ledger_json = "data/state/opportunity_ledger.json"
+opportunity_ledger_csv = "data/state/opportunity_ledger.csv"
+professors_csv = "data/state/professores_ufal.csv"
 profile_yaml = "config/profile.yaml"
 
 [sigaa]
@@ -12,6 +16,8 @@ headless = false
 public_delay_seconds = 0.85
 public_detail_depth = 1
 public_max_detail_pages = 200
+username_env = "UFAL_SIGAA_USERNAME"
+password_env = "UFAL_SIGAA_PASSWORD"
 
 [[sigaa.centers]]
 name = "FACULDADE DE MEDICINA"
@@ -23,16 +29,75 @@ name = "INSTITUTO DE CIÊNCIAS BIOLÓGICAS E DA SAÚDE"
 code = "854"
 slug = "ICBS"
 
-[analysis]
-word_max_features = 18000
-char_max_features = 18000
-lsa_components = 64
-nmf_topics = 8
-clusters = 8
-weight_lsa = 0.55
-weight_tfidf = 0.25
-weight_bm25 = 0.20
-max_professor_text_chars = 120000
+# ---------------------------------------------------------------------------
+# Semantic engine
+# ---------------------------------------------------------------------------
+# Every value here participates in the semantic_space_id hash: changing one
+# produces a new space rather than silently altering an existing one.
+
+[semantics]
+word_max_features = 40000
+char_max_features = 60000
+word_min_df = 2
+char_min_df = 3
+
+# Corpus-native latent representation. "ppmi" (shifted PPMI + SVD over
+# term-context counts) benchmarks at or above LSA on every PULSAR task while
+# being far cheaper than LSA at the dimensionality LSA needs to compete.
+latent_model = "ppmi"
+ppmi_components = 300
+ppmi_window = 6
+ppmi_min_count = 4
+ppmi_shift = 1.0
+# Only used when latent_model = "lsa". Anything below ~256 benchmarks badly on
+# this corpus; the old 48/64 values were a serious under-parameterization.
+lsa_components = 384
+
+# Pretrained neural view (LM Studio). Falls back gracefully when unavailable.
+use_neural = true
+# Matryoshka truncation. Benchmarked: 2560 -> 1024 changes nothing measurable
+# (professor_holdout NDCG@10 0.631 -> 0.633) at 2.5x less memory. 512 is worse.
+neural_dimension = 1024
+
+# Multi-view integration: "none" | "block" | "joint_svd".
+# Block concatenation of unit-norm views makes cos(z_a, z_b) exactly the
+# weight-normalized average of per-view cosines — a real joint metric space.
+fusion = "block"
+joint_svd_components = 192
+
+[semantics.fusion_weights]
+# Settled by the fusion weight sweep on the §9 battery. Qwen leads the graded
+# thematic tasks and is the WORST channel at literal recall; PPMI is the
+# corpus-native complement; a light word-TF-IDF block restores literal recall
+# almost for free. Everything within qwen 1.5-2.0 / word 0.5-0.75 sits on a
+# plateau (<0.01 apart), so this is the best-ranked of the three-view configs
+# rather than a sharp optimum. A fourth view (LSA or char) buys ~0.01 on one
+# task and loses as much on another: not enough to earn the complexity.
+neural = 2.0
+latent = 1.0
+lexical_word = 0.75
+
+[semantics.overall_weights]
+domain = 1.0
+methods = 0.6
+skills = 0.4
+
+[embedding]
+provider = "openai_compatible"
+base_url = "http://127.0.0.1:1234/v1"
+model = "text-embedding-qwen3-embedding-4b"
+# LM Studio ignores the bearer token; this is a placeholder, not a secret.
+# A real key would belong in the environment, never here.
+api_key = "lm-studio"
+batch_size = 32
+timeout_seconds = 300
+max_retries = 3
+max_chars = 2000
+
+[topics]
+min_k = 3
+max_k = 9
+min_support = 3
 
 [smtp]
 host = ""
@@ -44,4 +109,4 @@ password_env = "PULSAR_SMTP_PASSWORD"
 from_address = ""
 from_name = ""
 reply_to = ""
-rate_limit_seconds = 1.0
+rate_limit_seconds = 1.5

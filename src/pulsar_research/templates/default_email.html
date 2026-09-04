@@ -1,0 +1,42 @@
+{# PULSAR email theme. Inline CSS only: Gmail/Outlook strip <style> unpredictably
+   and no client runs JavaScript. Nothing here loads an external asset. #}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ subject }}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6f8;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;padding:24px 12px;">
+  <tr><td align="center">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border:1px solid #e2e7ec;border-radius:10px;">
+      <tr><td style="padding:26px 30px 8px 30px;font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.6;color:#1d252d;">
+        {{ body_html }}
+      </td></tr>
+      {% if primary and primary.plan_title %}
+      <tr><td style="padding:4px 30px 8px 30px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f9fb;border:1px solid #e2e7ec;border-radius:8px;">
+          <tr><td style="padding:14px 16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.5;color:#41505e;">
+            <div style="text-transform:uppercase;letter-spacing:.08em;font-size:10px;color:#7a8a99;font-weight:bold;">Oportunidade referida</div>
+            <div style="margin-top:5px;color:#1d252d;font-weight:bold;">{{ primary.plan_title }}</div>
+            {% if primary.project_title and primary.project_title != primary.plan_title %}
+            <div style="margin-top:2px;">Projeto: {{ primary.project_title }}</div>
+            {% endif %}
+            <div style="margin-top:4px;">
+              {% if primary.project_code %}{{ primary.project_code }}{% endif %}
+              {% if primary.edital %} · Edital {{ primary.edital }}{% endif %}
+              {% if primary.funded_slots %} · {{ primary.funded_slots }} vaga(s) com bolsa{% endif %}
+            </div>
+          </td></tr>
+        </table>
+      </td></tr>
+      {% endif %}
+      <tr><td style="padding:6px 30px 26px 30px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#7a8a99;border-top:1px solid #eef1f4;">
+        Mensagem individual, enviada diretamente por {{ sender_name }}. Se preferir não receber novos contatos, basta responder informando.
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>

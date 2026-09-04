@@ -1,13 +1,22 @@
+# Environments and build artifacts
 .venv/
 __pycache__/
 *.py[cod]
+*.egg-info/
+build/
+dist/
 .pytest_cache/
+.ruff_cache/
+
+# Secrets
 .env
-*.duckdb
-*.wal
-data/raw/
-data/cache/
-data/public_sigaa/
-data/exports/
-projects_ledger.json
-projects_ledger.csv
+.env.local
+
+# Acquired data, caches and generated artifacts.
+# `data/` holds expensive provenance (raw SIGAA/Lattes archives) and fully
+# regenerable derived state. Neither belongs in git; back it up separately.
+data/
+
+# Never commit patch-installer debris again.
+.pulsar-backups/
+.pulsar_patch_backups/

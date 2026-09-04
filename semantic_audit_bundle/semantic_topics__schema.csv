@@ -1,8 +1,0 @@
-column_name,column_type,null,key,default,extra
-model_id,VARCHAR,YES,,,
-space,VARCHAR,YES,,,
-topic_id,BIGINT,YES,,,
-label,VARCHAR,YES,,,
-top_terms_json,VARCHAR,YES,,,
-diagnostics_json,VARCHAR,YES,,,
-analyzed_at,VARCHAR,YES,,,

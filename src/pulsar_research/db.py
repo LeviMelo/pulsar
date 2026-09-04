@@ -1,6 +1,19 @@
+"""DuckDB canonical store: schema, migrations and small query helpers.
+
+Layering rule: **acquired** tables (`opportunities`, `professors`,
+`sigaa_public_*`) are facts and are only ever written by acquisition.
+**Derived** tables (everything keyed by `space_id` or `run_id`) are disposable
+and always rebuildable from the acquired tables plus configuration.
+
+Nothing here holds a long-lived connection. DuckDB takes a process-level write
+lock, so short scoped connections keep the CLI, the dashboard and a background
+embedding job from deadlocking each other.
+"""
+
 from __future__ import annotations
 
 import json
+import re
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -8,12 +21,18 @@ from typing import Any, Iterator
 
 import duckdb
 
+SCHEMA_VERSION = "3"
+
 
 def utcnow() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-SCHEMA_SQL = r"""
+# ---------------------------------------------------------------------------
+# Acquired facts
+# ---------------------------------------------------------------------------
+
+ACQUIRED_SCHEMA = r"""
 CREATE TABLE IF NOT EXISTS meta (
     key VARCHAR PRIMARY KEY,
     value VARCHAR,
@@ -95,58 +114,139 @@ CREATE TABLE IF NOT EXISTS applications (
     synced_at VARCHAR
 );
 
-CREATE TABLE IF NOT EXISTS analysis_documents (
-    entity_type VARCHAR,
-    entity_id VARCHAR,
-    document_text VARCHAR,
-    document_hash VARCHAR,
-    built_at VARCHAR
+CREATE TABLE IF NOT EXISTS sync_runs (
+    run_id VARCHAR,
+    source VARCHAR,
+    started_at VARCHAR,
+    finished_at VARCHAR,
+    status VARCHAR,
+    details_json VARCHAR
+);
+"""
+
+# ---------------------------------------------------------------------------
+# Derived intelligence
+# ---------------------------------------------------------------------------
+
+DERIVED_SCHEMA = r"""
+-- A semantic space is corpus + preprocessing + architecture + model identity.
+-- Topics, geometry, skills and benchmarks belong to a space.
+CREATE TABLE IF NOT EXISTS semantic_spaces (
+    space_id VARCHAR PRIMARY KEY,
+    corpus_fingerprint VARCHAR,
+    identity_json VARCHAR,
+    stats_json VARCHAR,
+    versions_json VARCHAR,
+    created_at VARCHAR
 );
 
-CREATE TABLE IF NOT EXISTS analysis_scores (
+-- A profile run is a semantic space plus the operator's interests.
+-- Rankings and evidence belong to a run; editing a personal interest must not
+-- invalidate the landscape.
+CREATE TABLE IF NOT EXISTS profile_runs (
+    run_id VARCHAR PRIMARY KEY,
+    space_id VARCHAR,
+    profile_json VARCHAR,
+    stats_json VARCHAR,
+    created_at VARCHAR
+);
+
+-- Tall score table. One row per (entity, facet, channel) so lexical relevance,
+-- latent affinity and neural affinity stay separately inspectable instead of
+-- being averaged into one mystical number.
+CREATE TABLE IF NOT EXISTS entity_scores (
+    run_id VARCHAR,
     entity_type VARCHAR,
     entity_id VARCHAR,
-    tfidf_similarity DOUBLE,
-    lsa_similarity DOUBLE,
-    bm25_similarity DOUBLE,
-    combined_score DOUBLE,
-    cluster_id BIGINT,
+    facet VARCHAR,
+    channel VARCHAR,
+    score DOUBLE,
+    percentile DOUBLE,
+    computed_at VARCHAR
+);
+
+CREATE TABLE IF NOT EXISTS entity_geometry (
+    space_id VARCHAR,
+    entity_type VARCHAR,
+    entity_id VARCHAR,
     x DOUBLE,
     y DOUBLE,
-    analyzed_at VARCHAR
+    cluster_id VARCHAR,
+    computed_at VARCHAR
 );
 
-CREATE TABLE IF NOT EXISTS analysis_topics (
-    topic_id BIGINT,
+CREATE TABLE IF NOT EXISTS semantic_topics (
+    space_id VARCHAR,
+    facet VARCHAR,
+    topic_id VARCHAR,
+    parent_id VARCHAR,
+    depth BIGINT,
     label VARCHAR,
-    top_terms_json VARCHAR,
-    analyzed_at VARCHAR
+    terms_json VARCHAR,
+    diagnostics_json VARCHAR,
+    computed_at VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS entity_topics (
+    space_id VARCHAR,
     entity_type VARCHAR,
     entity_id VARCHAR,
-    topic_id BIGINT,
+    facet VARCHAR,
+    topic_id VARCHAR,
     weight DOUBLE,
-    analyzed_at VARCHAR
+    is_dominant BOOLEAN,
+    computed_at VARCHAR
 );
 
-CREATE TABLE IF NOT EXISTS professor_metrics (
-    siape VARCHAR PRIMARY KEY,
-    opportunity_count BIGINT,
-    funded_opportunity_count BIGINT,
-    funded_slots BIGINT,
-    current_year_public_projects BIGINT,
-    public_project_count BIGINT,
-    lattes_project_count BIGINT,
-    publication_count BIGINT,
-    funding_agency_count BIGINT,
-    collaborator_count BIGINT,
-    lattes_leaf_count BIGINT,
-    research_area_count BIGINT,
-    semantic_fit DOUBLE,
-    calculated_at VARCHAR
+-- Skills are a multi-label set, never a soft partition. `generic` marks
+-- competencies every project claims, which are recorded but never scored.
+CREATE TABLE IF NOT EXISTS entity_skills (
+    space_id VARCHAR,
+    entity_type VARCHAR,
+    entity_id VARCHAR,
+    skill_id VARCHAR,
+    label VARCHAR,
+    category VARCHAR,
+    generic BOOLEAN,
+    mentions BIGINT,
+    evidence VARCHAR,
+    computed_at VARCHAR
 );
+
+-- Atomic research evidence. This is what makes a ranking explainable.
+CREATE TABLE IF NOT EXISTS professor_evidence (
+    run_id VARCHAR,
+    siape VARCHAR,
+    scope VARCHAR,          -- 'current' | 'trajectory'
+    evidence_rank BIGINT,
+    atom_id VARCHAR,
+    kind VARCHAR,
+    label VARCHAR,
+    year BIGINT,
+    score DOUBLE,
+    weight DOUBLE,
+    payload_json VARCHAR,
+    computed_at VARCHAR
+);
+
+CREATE TABLE IF NOT EXISTS semantic_benchmarks (
+    space_id VARCHAR,
+    benchmark VARCHAR,
+    channel VARCHAR,
+    metric VARCHAR,
+    value DOUBLE,
+    note VARCHAR,
+    computed_at VARCHAR
+);
+
+CREATE TABLE IF NOT EXISTS map_diagnostics (
+    space_id VARCHAR,
+    entity_type VARCHAR,
+    metric VARCHAR,
+    value DOUBLE,
+    computed_at VARCHAR
+);
+
 
 CREATE TABLE IF NOT EXISTS collaboration_edges (
     source_siape VARCHAR,
@@ -163,12 +263,49 @@ CREATE TABLE IF NOT EXISTS global_metrics (
     calculated_at VARCHAR
 );
 
+CREATE TABLE IF NOT EXISTS embedding_cache (
+    provider_key VARCHAR,
+    text_sha256 VARCHAR,
+    dimension BIGINT,
+    vector BLOB,
+    created_at VARCHAR,
+    PRIMARY KEY (provider_key, text_sha256)
+);
+"""
+
+PROFESSOR_METRICS_SCHEMA = r"""
+CREATE TABLE IF NOT EXISTS professor_metrics (
+    siape VARCHAR PRIMARY KEY,
+    opportunity_count BIGINT,
+    funded_opportunity_count BIGINT,
+    funded_slots BIGINT,
+    current_project_count BIGINT,
+    public_project_count BIGINT,
+    lattes_project_count BIGINT,
+    publication_count BIGINT,
+    orientation_count BIGINT,
+    funding_agency_count BIGINT,
+    collaborator_count BIGINT,
+    research_area_count BIGINT,
+    atom_count BIGINT,
+    latest_evidence_year BIGINT,
+    calculated_at VARCHAR
+);
+"""
+
+# ---------------------------------------------------------------------------
+# Outreach
+# ---------------------------------------------------------------------------
+
+OUTREACH_SCHEMA = r"""
 CREATE TABLE IF NOT EXISTS campaigns (
     campaign_id VARCHAR PRIMARY KEY,
     name VARCHAR,
     audience_query_json VARCHAR,
+    provenance_json VARCHAR,
     subject_template VARCHAR,
     body_template VARCHAR,
+    theme VARCHAR,
     status VARCHAR,
     created_at VARCHAR,
     updated_at VARCHAR
@@ -180,6 +317,7 @@ CREATE TABLE IF NOT EXISTS campaign_recipients (
     professor_name VARCHAR,
     email VARCHAR,
     qualifying_evidence_json VARCHAR,
+    rationale_json VARCHAR,
     selection_score DOUBLE,
     selected BOOLEAN,
     created_at VARCHAR
@@ -189,7 +327,8 @@ CREATE TABLE IF NOT EXISTS campaign_messages (
     campaign_id VARCHAR,
     siape VARCHAR,
     subject VARCHAR,
-    body VARCHAR,
+    body_text VARCHAR,
+    body_html VARCHAR,
     is_customized BOOLEAN,
     status VARCHAR,
     rendered_at VARCHAR,
@@ -197,94 +336,19 @@ CREATE TABLE IF NOT EXISTS campaign_messages (
     provider_message_id VARCHAR,
     error VARCHAR
 );
-
-CREATE TABLE IF NOT EXISTS sync_runs (
-    run_id VARCHAR,
-    source VARCHAR,
-    started_at VARCHAR,
-    finished_at VARCHAR,
-    status VARCHAR,
-    details_json VARCHAR
-);
-
--- Semantic Engine v2: versioned, decomposable, query-independent model outputs.
-CREATE TABLE IF NOT EXISTS semantic_runs (
-    model_id VARCHAR PRIMARY KEY,
-    corpus_hash VARCHAR,
-    config_json VARCHAR,
-    corpus_stats_json VARCHAR,
-    benchmark_json VARCHAR,
-    created_at VARCHAR
-);
-
-CREATE TABLE IF NOT EXISTS semantic_entity_scores (
-    model_id VARCHAR,
-    entity_type VARCHAR,
-    entity_id VARCHAR,
-    domain_word DOUBLE,
-    domain_char DOUBLE,
-    domain_lsa DOUBLE,
-    domain_bm25f DOUBLE,
-    domain_fit DOUBLE,
-    method_word DOUBLE,
-    method_char DOUBLE,
-    method_lsa DOUBLE,
-    method_bm25f DOUBLE,
-    method_fit DOUBLE,
-    skill_word DOUBLE,
-    skill_char DOUBLE,
-    skill_lsa DOUBLE,
-    skill_bm25f DOUBLE,
-    skill_fit DOUBLE,
-    combined_fit DOUBLE,
-    cluster_id BIGINT,
-    x DOUBLE,
-    y DOUBLE,
-    analyzed_at VARCHAR
-);
-
-CREATE TABLE IF NOT EXISTS semantic_topics (
-    model_id VARCHAR,
-    space VARCHAR,
-    topic_id BIGINT,
-    label VARCHAR,
-    top_terms_json VARCHAR,
-    diagnostics_json VARCHAR,
-    analyzed_at VARCHAR
-);
-
-CREATE TABLE IF NOT EXISTS semantic_entity_topics (
-    model_id VARCHAR,
-    entity_type VARCHAR,
-    entity_id VARCHAR,
-    space VARCHAR,
-    topic_id BIGINT,
-    weight DOUBLE,
-    analyzed_at VARCHAR
-);
-
-CREATE TABLE IF NOT EXISTS semantic_professor_evidence (
-    model_id VARCHAR,
-    siape VARCHAR,
-    evidence_rank BIGINT,
-    item_type VARCHAR,
-    item_id VARCHAR,
-    label VARCHAR,
-    score DOUBLE,
-    payload_json VARCHAR,
-    analyzed_at VARCHAR
-);
-
-CREATE TABLE IF NOT EXISTS semantic_benchmarks (
-    model_id VARCHAR,
-    benchmark VARCHAR,
-    channel VARCHAR,
-    metric VARCHAR,
-    value DOUBLE,
-    payload_json VARCHAR,
-    analyzed_at VARCHAR
-);
 """
+
+#: Tables from the v1/v2 engines whose content is fully superseded. They are
+#: dropped on migration; every value in them is rebuildable from acquired data.
+LEGACY_TABLES = (
+    "analysis_documents",
+    "analysis_scores",
+    "analysis_topics",
+    "semantic_runs",
+    "semantic_entity_scores",
+    "semantic_entity_topics",
+    "semantic_professor_evidence",
+)
 
 
 class Database:
@@ -300,26 +364,52 @@ class Database:
         finally:
             con.close()
 
-    def initialize(self) -> None:
+    def initialize(self) -> dict[str, Any]:
+        """Create the schema and migrate away from superseded engines."""
+        report: dict[str, Any] = {"dropped": [], "rebuilt": [], "created": True}
         with self.connect() as con:
-            con.execute(SCHEMA_SQL)
-            con.execute("INSERT OR REPLACE INTO meta VALUES ('schema_version', '2', ?)", [utcnow()])
+            existing = _existing_tables(con)
+            report["dropped"] = _drop_legacy(con, existing)
+            # `CREATE TABLE IF NOT EXISTS` cannot reshape a table that an older
+            # engine created with different columns, and it fails silently, so
+            # every derived table is reconciled against the current DDL first.
+            # Derived tables are disposable by definition; acquired and outreach
+            # tables hold state and are never dropped here.
+            report["rebuilt"] = _reconcile_derived(con, existing)
+            for block in (ACQUIRED_SCHEMA, DERIVED_SCHEMA, PROFESSOR_METRICS_SCHEMA, OUTREACH_SCHEMA):
+                con.execute(block)
+            previous = con.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
+            previous_version = str(previous[0]) if previous else "0"
+            if previous_version != SCHEMA_VERSION:
+                report.update(_migrate(con, previous_version, existing))
+                report["dropped"] = sorted(set(report["dropped"]) | set(report.get("migration_dropped", [])))
+                report.pop("migration_dropped", None)
+            set_meta(con, "schema_version", SCHEMA_VERSION)
             con.execute("CHECKPOINT")
+        return report
 
     def query_df(self, sql: str, params: list[Any] | tuple[Any, ...] | None = None):
         with self.connect(read_only=True) as con:
-            return con.execute(sql, params or []).df()
+            return con.execute(sql, list(params or [])).df()
 
     def execute(self, sql: str, params: list[Any] | tuple[Any, ...] | None = None) -> None:
         with self.connect() as con:
-            con.execute(sql, params or [])
+            con.execute(sql, list(params or []))
 
     def table_exists(self, table: str) -> bool:
         with self.connect(read_only=True) as con:
-            return bool(con.execute("SELECT COUNT(*) FROM information_schema.tables WHERE table_name=?", [table]).fetchone()[0])
+            return bool(con.execute(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_name=?", [table]
+            ).fetchone()[0])
+
+    def scalar(self, sql: str, params: list[Any] | tuple[Any, ...] | None = None, default: Any = None) -> Any:
+        with self.connect(read_only=True) as con:
+            row = con.execute(sql, list(params or [])).fetchone()
+        return row[0] if row and row[0] is not None else default
 
     def counts(self) -> dict[str, int]:
-        tables = ["professors", "projects", "opportunities", "applications", "analysis_scores", "campaigns"]
+        tables = ["professors", "projects", "opportunities", "applications",
+                  "entity_scores", "professor_evidence", "campaigns", "embedding_cache"]
         out: dict[str, int] = {}
         with self.connect(read_only=True) as con:
             for table in tables:
@@ -330,5 +420,116 @@ class Database:
         return out
 
 
+_CREATE_RE = re.compile(
+    r"CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(\w+)\s*\((.*?)\);",
+    re.IGNORECASE | re.DOTALL)
+
+
+def _declared_columns(*blocks: str) -> dict[str, tuple[str, ...]]:
+    """Column names per table, in DDL order, parsed from the schema constants.
+
+    The DDL text stays the single source of truth; nothing restates a column list.
+    """
+    out: dict[str, tuple[str, ...]] = {}
+    for block in blocks:
+        for table, body in _CREATE_RE.findall(block):
+            cols: list[str] = []
+            for line in body.splitlines():
+                line = line.strip().strip(",")
+                if not line or line.startswith("--") or line.upper().startswith(("PRIMARY", "UNIQUE", "FOREIGN")):
+                    continue
+                cols.append(line.split()[0].strip('"'))
+            out[table.lower()] = tuple(cols)
+    return out
+
+
+DERIVED_TABLES = _declared_columns(DERIVED_SCHEMA, PROFESSOR_METRICS_SCHEMA)
+OUTREACH_TABLES = _declared_columns(OUTREACH_SCHEMA)
+
+
+def _existing_tables(con) -> set[str]:
+    return {r[0] for r in con.execute(
+        "SELECT table_name FROM information_schema.tables WHERE table_schema='main'").fetchall()}
+
+
+def _drop_legacy(con, existing: set[str]) -> list[str]:
+    dropped = [t for t in LEGACY_TABLES if t in existing]
+    for table in dropped:
+        con.execute(f'DROP TABLE IF EXISTS "{table}"')
+    return dropped
+
+
+def _reconcile_derived(con, existing: set[str]) -> list[str]:
+    """Drop tables whose live shape no longer matches the declared DDL.
+
+    Derived tables are disposable and are always rebuilt. Outreach tables hold
+    real state, so they are rebuilt only when empty — that clears the column
+    *order* drift an `ALTER TABLE ADD COLUMN` migration leaves behind without
+    ever discarding a campaign. Writers use named columns regardless.
+    """
+    rebuilt: list[str] = []
+    for table, expected in list(DERIVED_TABLES.items()) + list(OUTREACH_TABLES.items()):
+        if table not in existing:
+            continue
+        live = [r[0] for r in con.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name=? "
+            "ORDER BY ordinal_position", [table]).fetchall()]
+        if set(live) == set(expected) and (table in DERIVED_TABLES or live == list(expected)):
+            continue
+        if table in OUTREACH_TABLES:
+            if con.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0]:
+                continue  # populated: keep the data, named writes cope with the order
+        con.execute(f'DROP TABLE IF EXISTS "{table}"')
+        rebuilt.append(table)
+    return rebuilt
+
+
+def _migrate(con, previous_version: str, existing: set[str]) -> dict[str, Any]:
+    """Forward-only migration. Derived tables are dropped, facts are preserved."""
+    dropped: list[str] = []
+
+    # v2 kept a wide professor_metrics and narrower campaign tables; rebuild the
+    # derived one and widen the outreach ones in place.
+    if previous_version in {"0", "1", "2"}:
+        con.execute("DROP TABLE IF EXISTS professor_metrics")
+        con.execute(PROFESSOR_METRICS_SCHEMA)
+        for table, column, ddl in (
+            ("campaigns", "provenance_json", "VARCHAR"),
+            ("campaigns", "theme", "VARCHAR"),
+            ("campaign_recipients", "rationale_json", "VARCHAR"),
+            ("campaign_messages", "body_html", "VARCHAR"),
+        ):
+            if table in existing:
+                try:
+                    con.execute(f'ALTER TABLE "{table}" ADD COLUMN "{column}" {ddl}')
+                except Exception:
+                    pass
+        if "campaign_messages" in existing:
+            cols = {r[0] for r in con.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='campaign_messages'"
+            ).fetchall()}
+            if "body" in cols and "body_text" not in cols:
+                con.execute('ALTER TABLE campaign_messages RENAME COLUMN body TO body_text')
+        con.execute("DELETE FROM meta WHERE key IN ('current_semantic_model_id')")
+    return {"migration_dropped": dropped, "migrated_from": previous_version}
+
+
+def set_meta(con, key: str, value: str) -> None:
+    """Upsert one `meta` row.
+
+    Written as delete+insert rather than `INSERT OR REPLACE` so it also works on
+    a store whose `meta` predates the primary key.
+    """
+    con.execute("DELETE FROM meta WHERE key=?", [key])
+    con.execute("INSERT INTO meta VALUES (?,?,?)", [key, value, utcnow()])
+
+
 def json_text(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str)
+
+
+def json_load(value: Any, default: Any = None) -> Any:
+    try:
+        return json.loads(value) if value else (default if default is not None else {})
+    except Exception:
+        return default if default is not None else {}

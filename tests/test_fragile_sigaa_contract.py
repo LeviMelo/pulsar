@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 def test_fragile_sigaa_literals_are_preserved():
-    source = (Path(__file__).parents[1] / "src" / "pulsar_research" / "sigaa" / "authenticated.py").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "pulsar_research" / "acquisition" / "sigaa_authenticated.py").read_text(encoding="utf-8")
     required = [
         "interessadoBolsa.acompanharInscricoes",
         "agregadorBolsas.iniciarBuscar",

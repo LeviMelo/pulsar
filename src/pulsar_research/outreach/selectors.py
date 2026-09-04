@@ -1,135 +1,162 @@
+"""Audience selection: structured filters + research intelligence + retrieval.
+
+An audience is never "everyone with a funded slot". Every recipient carries the
+exact records that qualified them — which opportunity, which project, which
+portfolio evidence, which channel scored it — so a campaign can always answer
+*why this person* months later.
+
+Semantic filtering always scores against the **full** corpus and filters
+afterwards. Scoring only the survivors of a structured filter would let a
+candidate's score change because some unrelated candidate was excluded.
+"""
+
 from __future__ import annotations
 
-from collections import defaultdict
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Sequence
 
-from ..db import Database
-from ..analysis.v2 import score_ad_hoc_opportunities
+import pandas as pd
+
+from ..db import Database, json_load
+from ..semantics.provenance import current_run_id
 
 
-def select_audience(
-    db: Database,
-    *,
-    funded_only: bool = True,
-    centers: list[str] | None = None,
-    min_opportunity_fit: float | None = None,
-    min_professor_fit: float | None = None,
-    require_email: bool = True,
-    exclude_already_contacted: bool = False,
-    keywords: list[str] | None = None,
-    clusters: list[int] | None = None,
-    topic_ids: list[int] | None = None,
-    min_topic_weight: float = 0.0,
-    semantic_query: str | None = None,
-    min_query_score: float | None = None,
-    min_public_projects: int | None = None,
-    min_publications: int | None = None,
-    min_funders: int | None = None,
-) -> list[dict[str, Any]]:
-    centers = [c for c in (centers or []) if c]
-    keywords = [k.strip() for k in (keywords or []) if k.strip()]
-    clusters = list(clusters or [])
-    topic_ids = list(topic_ids or [])
-    # Ad-hoc campaign semantics are always scored against the FULL opportunity
-    # corpus. Structured filters must not redefine IDF/LSA and thereby change a
-    # candidate's score merely because another candidate was excluded.
-    query_score_map: dict[str, dict[str, float]] = {}
-    if semantic_query:
-        with db.connect(read_only=True) as con:
-            cols = [d[0] for d in con.execute("SELECT * FROM opportunities LIMIT 0").description]
-            all_rows = [dict(zip(cols, r)) for r in con.execute("SELECT * FROM opportunities ORDER BY id_opportunity").fetchall()]
-        if all_rows:
-            qr = score_ad_hoc_opportunities(all_rows, semantic_query)
-            for i, oid in enumerate(qr.ids):
-                query_score_map[str(oid)] = {
-                    "combined": float(qr.combined[i]),
-                    "domain": float(qr.domain.fit[i]),
-                    "methods": float(qr.methods.fit[i]),
-                    "skills": float(qr.skills.fit[i]),
-                }
+@dataclass(slots=True)
+class AudienceQuery:
+    """Everything that defines an audience. Persisted verbatim with the campaign."""
 
+    funded_only: bool = True
+    centers: list[str] = field(default_factory=list)
+    departments: list[str] = field(default_factory=list)
+    require_email: bool = True
+    exclude_already_contacted: bool = True
+
+    # Research-intelligence filters
+    min_current_percentile: float | None = None
+    min_trajectory_percentile: float | None = None
+    min_opportunity_percentile: float | None = None
+    rank_channel: str = "fused"
+    rank_facet: str = "overall"
+
+    # Structure filters
+    topic_ids: list[str] = field(default_factory=list)
+    topic_facet: str = "domain"
+    min_topic_weight: float = 0.15
+    skill_ids: list[str] = field(default_factory=list)
+    keywords: list[str] = field(default_factory=list)
+
+    # Portfolio thresholds
+    min_public_projects: int | None = None
+    min_publications: int | None = None
+    min_funders: int | None = None
+
+    limit: int | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {k: getattr(self, k) for k in self.__slots__}
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "AudienceQuery":
+        return cls(**{k: v for k, v in (payload or {}).items() if k in cls.__slots__})
+
+
+def _opportunity_scores(db: Database, run_id: str, facet: str, channel: str) -> dict[str, float]:
+    rows = db.query_df(
+        "SELECT entity_id, percentile FROM entity_scores "
+        "WHERE run_id=? AND entity_type='opportunity' AND facet=? AND channel=?",
+        [run_id, facet, channel],
+    )
+    return {str(r.entity_id): float(r.percentile) for r in rows.itertuples()}
+
+
+def _professor_scores(db: Database, run_id: str, facet: str, channel: str) -> dict[str, float]:
+    rows = db.query_df(
+        "SELECT entity_id, percentile FROM entity_scores "
+        "WHERE run_id=? AND entity_type='professor' AND facet=? AND channel=?",
+        [run_id, facet, channel],
+    )
+    return {str(r.entity_id): float(r.percentile) for r in rows.itertuples()}
+
+
+def select_audience(db: Database, query: AudienceQuery, *, run_id: str | None = None) -> list[dict[str, Any]]:
+    """Build the recipient list, each with its qualifying evidence and rationale."""
+    run_id = run_id or current_run_id(db)
     clauses = ["COALESCE(o.professor_siape,'')<>''"]
     params: list[Any] = []
-    if funded_only:
+    if query.funded_only:
         clauses.append("o.has_funding=TRUE")
-    if centers:
-        placeholders = ",".join("?" for _ in centers)
-        clauses.append(f"o.center IN ({placeholders})")
-        params.extend(centers)
-    if require_email:
+    if query.centers:
+        clauses.append(f"o.center IN ({','.join('?' for _ in query.centers)})")
+        params.extend(query.centers)
+    if query.departments:
+        clauses.append(f"p.department IN ({','.join('?' for _ in query.departments)})")
+        params.extend(query.departments)
+    if query.require_email:
         clauses.append("COALESCE(p.email,'')<>''")
-    if min_opportunity_fit is not None:
-        clauses.append("COALESCE(os.combined_score,0)>=?")
-        params.append(float(min_opportunity_fit))
-    if min_professor_fit is not None:
-        clauses.append("COALESCE(ps.combined_score,0)>=?")
-        params.append(float(min_professor_fit))
-    if min_public_projects is not None:
+    if query.min_public_projects is not None:
         clauses.append("COALESCE(pm.public_project_count,0)>=?")
-        params.append(int(min_public_projects))
-    if min_publications is not None:
+        params.append(int(query.min_public_projects))
+    if query.min_publications is not None:
         clauses.append("COALESCE(pm.publication_count,0)>=?")
-        params.append(int(min_publications))
-    if min_funders is not None:
+        params.append(int(query.min_publications))
+    if query.min_funders is not None:
         clauses.append("COALESCE(pm.funding_agency_count,0)>=?")
-        params.append(int(min_funders))
-    if exclude_already_contacted:
-        clauses.append("NOT EXISTS (SELECT 1 FROM campaign_messages cm WHERE cm.siape=o.professor_siape AND cm.status='sent')")
-    if keywords:
-        for keyword in keywords:
-            clauses.append("LOWER(COALESCE(o.project_title,'') || ' ' || COALESCE(o.plan_title,'') || ' ' || COALESCE(o.area,'') || ' ' || COALESCE(o.methodology,'') || ' ' || COALESCE(o.objectives,'')) LIKE ?")
-            params.append('%' + keyword.lower() + '%')
-    if clusters:
-        placeholders = ",".join("?" for _ in clusters)
-        clauses.append(f"os.cluster_id IN ({placeholders})")
-        params.extend(clusters)
-    if topic_ids:
-        placeholders = ",".join("?" for _ in topic_ids)
-        clauses.append(f"EXISTS (SELECT 1 FROM entity_topics et WHERE et.entity_type='opportunity' AND et.entity_id=o.id_opportunity AND et.topic_id IN ({placeholders}) AND et.weight>=?)")
-        params.extend(topic_ids); params.append(float(min_topic_weight))
+        params.append(int(query.min_funders))
+    if query.exclude_already_contacted:
+        clauses.append("NOT EXISTS (SELECT 1 FROM campaign_messages cm "
+                       "WHERE cm.siape=o.professor_siape AND cm.status='sent')")
+    for keyword in query.keywords:
+        clauses.append(
+            "LOWER(COALESCE(o.project_title,'')||' '||COALESCE(o.plan_title,'')||' '||"
+            "COALESCE(o.area,'')||' '||COALESCE(o.methodology,'')||' '||"
+            "COALESCE(o.objectives,'')) LIKE ?"
+        )
+        params.append(f"%{keyword.lower()}%")
+    if query.topic_ids:
+        clauses.append(
+            "EXISTS (SELECT 1 FROM entity_topics et WHERE et.entity_type='opportunity' "
+            f"AND et.entity_id=o.id_opportunity AND et.facet=? AND et.topic_id IN "
+            f"({','.join('?' for _ in query.topic_ids)}) AND et.weight>=?)"
+        )
+        params.append(query.topic_facet)
+        params.extend(query.topic_ids)
+        params.append(float(query.min_topic_weight))
+    if query.skill_ids:
+        clauses.append(
+            "EXISTS (SELECT 1 FROM entity_skills es WHERE es.entity_type='opportunity' "
+            f"AND es.entity_id=o.id_opportunity AND es.skill_id IN "
+            f"({','.join('?' for _ in query.skill_ids)}))"
+        )
+        params.extend(query.skill_ids)
 
     sql = f"""
-    SELECT
-      o.professor_siape, p.canonical_name, p.email, p.department, p.center,
-      p.profile_summary,
-      o.id_opportunity, o.project_code, o.project_title, o.plan_title,
-      o.funded_slots, o.vacancies_text, o.edital, o.quota, o.area, o.large_area,
-      o.methodology, o.objectives,
-      COALESCE(os.combined_score,0) opportunity_fit,
-      COALESCE(ps.combined_score,0) professor_fit
+    SELECT o.professor_siape, p.canonical_name, p.email, p.department, p.center, p.profile_summary,
+           o.id_opportunity, o.project_code, o.project_title, o.plan_title, o.funded_slots,
+           o.vacancies_text, o.edital, o.quota, o.area, o.large_area, o.objectives, o.methodology,
+           COALESCE(pm.publication_count,0) AS publications,
+           COALESCE(pm.public_project_count,0) AS public_projects,
+           COALESCE(pm.funding_agency_count,0) AS funders
     FROM opportunities o
     JOIN professors p ON p.siape=o.professor_siape
-    LEFT JOIN analysis_scores os ON os.entity_type='opportunity' AND os.entity_id=o.id_opportunity
-    LEFT JOIN analysis_scores ps ON ps.entity_type='professor' AND ps.entity_id=o.professor_siape
     LEFT JOIN professor_metrics pm ON pm.siape=o.professor_siape
     WHERE {' AND '.join(clauses)}
-    ORDER BY p.canonical_name, opportunity_fit DESC, o.id_opportunity
+    ORDER BY p.canonical_name, o.id_opportunity
     """
-    with db.connect(read_only=True) as con:
-        rows = con.execute(sql, params).fetchdf().to_dict("records")
+    rows = db.query_df(sql, params).to_dict("records")
 
-    if semantic_query and rows:
-        enriched = []
-        for r in rows:
-            qrec = query_score_map.get(str(r.get("id_opportunity") or ""), {})
-            score = float(qrec.get("combined", 0.0))
-            r["campaign_query_score"] = score
-            r["campaign_query_domain"] = float(qrec.get("domain", 0.0))
-            r["campaign_query_methods"] = float(qrec.get("methods", 0.0))
-            r["campaign_query_skills"] = float(qrec.get("skills", 0.0))
-            if min_query_score is None or score >= float(min_query_score):
-                enriched.append(r)
-        rows = enriched
-    else:
-        for r in rows:
-            r["campaign_query_score"] = 0.0
-            r["campaign_query_domain"] = 0.0
-            r["campaign_query_methods"] = 0.0
-            r["campaign_query_skills"] = 0.0
+    opp_pct = _opportunity_scores(db, run_id, query.rank_facet, query.rank_channel) if run_id else {}
+    current_pct = _professor_scores(db, run_id, "current", query.rank_channel) if run_id else {}
+    trajectory_pct = _professor_scores(db, run_id, "trajectory", query.rank_channel) if run_id else {}
+    evidence_rows = _evidence_by_professor(db, run_id) if run_id else {}
+    skills_by_opp = _skills_by_entity(db, "opportunity")
 
     grouped: dict[str, dict[str, Any]] = {}
     for row in rows:
         siape = str(row["professor_siape"])
+        oid = str(row["id_opportunity"])
+        opportunity_percentile = opp_pct.get(oid, 0.0)
+        if query.min_opportunity_percentile is not None and opportunity_percentile < query.min_opportunity_percentile:
+            continue
         recipient = grouped.setdefault(siape, {
             "siape": siape,
             "professor_name": row.get("canonical_name") or "",
@@ -137,11 +164,16 @@ def select_audience(
             "department": row.get("department") or "",
             "center": row.get("center") or "",
             "profile_summary": row.get("profile_summary") or "",
-            "professor_fit": float(row.get("professor_fit") or 0),
+            "current_percentile": current_pct.get(siape, 0.0),
+            "trajectory_percentile": trajectory_pct.get(siape, 0.0),
+            "publications": int(row.get("publications") or 0),
+            "public_projects": int(row.get("public_projects") or 0),
+            "funders": int(row.get("funders") or 0),
             "qualifying_opportunities": [],
+            "portfolio_evidence": evidence_rows.get(siape, []),
         })
         recipient["qualifying_opportunities"].append({
-            "id_opportunity": str(row.get("id_opportunity") or ""),
+            "id_opportunity": oid,
             "project_code": row.get("project_code") or "",
             "project_title": row.get("project_title") or "",
             "plan_title": row.get("plan_title") or "",
@@ -150,19 +182,85 @@ def select_audience(
             "edital": row.get("edital") or "",
             "quota": row.get("quota") or "",
             "area": row.get("area") or row.get("large_area") or "",
-            "methodology": row.get("methodology") or "",
             "objectives": row.get("objectives") or "",
-            "opportunity_fit": float(row.get("opportunity_fit") or 0),
-            "campaign_query_score": float(row.get("campaign_query_score") or 0),
-            "campaign_query_domain": float(row.get("campaign_query_domain") or 0),
-            "campaign_query_methods": float(row.get("campaign_query_methods") or 0),
-            "campaign_query_skills": float(row.get("campaign_query_skills") or 0),
+            "methodology": row.get("methodology") or "",
+            "opportunity_percentile": opportunity_percentile,
+            "skills": skills_by_opp.get(oid, []),
         })
-    out = list(grouped.values())
-    for rec in out:
-        query_scores = [o.get("campaign_query_score", 0.0) for o in rec["qualifying_opportunities"]]
-        rec["selection_score"] = max(query_scores) if semantic_query else max(
-            [rec["professor_fit"]] + [o["opportunity_fit"] for o in rec["qualifying_opportunities"]]
+
+    out: list[dict[str, Any]] = []
+    for recipient in grouped.values():
+        if query.min_current_percentile is not None and recipient["current_percentile"] < query.min_current_percentile:
+            continue
+        if query.min_trajectory_percentile is not None and recipient["trajectory_percentile"] < query.min_trajectory_percentile:
+            continue
+        recipient["qualifying_opportunities"].sort(key=lambda o: -o["opportunity_percentile"])
+        best = recipient["qualifying_opportunities"][0]["opportunity_percentile"] if recipient["qualifying_opportunities"] else 0.0
+        # The selection score is a *rank* blend, stated as such. It orders the
+        # audience; it is never presented as a probability of interest.
+        recipient["selection_score"] = round(
+            0.5 * best + 0.3 * recipient["current_percentile"] + 0.2 * recipient["trajectory_percentile"], 3
         )
-    out.sort(key=lambda x: x["selection_score"], reverse=True)
+        recipient["rationale"] = _rationale(recipient)
+        out.append(recipient)
+    out.sort(key=lambda r: (-r["selection_score"], r["professor_name"]))
+    return out[: query.limit] if query.limit else out
+
+
+def _rationale(recipient: dict[str, Any]) -> dict[str, Any]:
+    """A short, checkable statement of why this professor is in the audience."""
+    best = recipient["qualifying_opportunities"][0] if recipient["qualifying_opportunities"] else {}
+    return {
+        "primary_opportunity": best.get("id_opportunity", ""),
+        "primary_title": best.get("plan_title") or best.get("project_title") or "",
+        "funded_slots": best.get("funded_slots", 0),
+        "opportunity_percentile": round(best.get("opportunity_percentile", 0.0), 1),
+        "current_percentile": round(recipient["current_percentile"], 1),
+        "trajectory_percentile": round(recipient["trajectory_percentile"], 1),
+        "matched_skills": [s["label"] for s in best.get("skills", []) if not s.get("generic")][:8],
+        "top_evidence": [
+            {"kind": e["kind"], "label": e["label"], "year": e["year"]}
+            for e in recipient["portfolio_evidence"][:3]
+        ],
+    }
+
+
+def _opt_int(value: Any) -> int | None:
+    """DuckDB nullable integers arrive as pandas NA, which raises on truth-testing."""
+    return None if value is None or pd.isna(value) else int(value)
+
+
+def _evidence_by_professor(db: Database, run_id: str) -> dict[str, list[dict[str, Any]]]:
+    rows = db.query_df(
+        "SELECT siape, scope, evidence_rank, kind, label, year, score, weight, payload_json "
+        "FROM professor_evidence WHERE run_id=? ORDER BY siape, scope, evidence_rank",
+        [run_id],
+    )
+    out: dict[str, list[dict[str, Any]]] = {}
+    for r in rows.itertuples():
+        out.setdefault(str(r.siape), []).append({
+            "scope": r.scope, "rank": int(r.evidence_rank), "kind": r.kind, "label": r.label,
+            "year": _opt_int(r.year),
+            "score": float(r.score), "weight": float(r.weight),
+            "payload": json_load(r.payload_json, {}),
+        })
+    for siape, items in out.items():
+        items.sort(key=lambda e: (e["scope"] != "current", e["rank"]))
+    return out
+
+
+def _skills_by_entity(db: Database, entity_type: str) -> dict[str, list[dict[str, Any]]]:
+    if not db.table_exists("entity_skills"):
+        return {}
+    rows = db.query_df(
+        "SELECT entity_id, skill_id, label, category, generic, mentions FROM entity_skills "
+        "WHERE entity_type=? ORDER BY entity_id, generic, mentions DESC",
+        [entity_type],
+    )
+    out: dict[str, list[dict[str, Any]]] = {}
+    for r in rows.itertuples():
+        out.setdefault(str(r.entity_id), []).append({
+            "skill_id": r.skill_id, "label": r.label, "category": r.category,
+            "generic": bool(r.generic), "mentions": int(r.mentions),
+        })
     return out

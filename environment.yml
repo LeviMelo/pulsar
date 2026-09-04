@@ -1,21 +1,29 @@
-name: pulsar
+# The working environment on the primary machine is the conda env `pegasus`
+# (Python 3.11). This file reproduces it from scratch elsewhere.
+name: pegasus
 channels:
   - conda-forge
 dependencies:
-  - python=3.12
+  - python=3.11
   - beautifulsoup4
   - charset-normalizer
   - duckdb
   - ftfy
+  - httpx
   - jinja2
-  - json5
+  - joblib
   - numpy
   - pandas
-  - playwright
+  - pyarrow
   - pyyaml
   - requests
   - rich
   - scikit-learn
+  - scipy
   - streamlit
   - typer
+  - pytest
   - pip
+  - pip:
+      - json5
+      - playwright

@@ -1,2 +1,0 @@
-[console_scripts]
-pulsar = pulsar_research.cli:app

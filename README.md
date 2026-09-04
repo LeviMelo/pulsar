@@ -1,179 +1,143 @@
 # PULSAR
 
-Local research/opportunity intelligence system for UFAL/SIGAA. It consolidates authenticated research opportunities, public professor/Lattes data, lightweight unsupervised semantic analysis, a DuckDB analytical store, a Streamlit operator dashboard, and personalized email campaigns.
+Local research-intelligence and opportunity-prospecting system for the UFAL/SIGAA
+research ecosystem. It acquires research opportunities and professor portfolios,
+builds an inspectable semantic model over them, ranks and explains what is worth
+pursuing, and turns that into deliberate, individually reviewed outreach.
 
-## Architecture
+Everything runs on one machine. No data leaves it; the only network calls are to
+SIGAA (to read what you can already read while logged in), to a local embedding
+server, and to your own SMTP relay when you explicitly send a campaign.
+
+`PLAN.md` is the canonical specification, architecture document, decision log and
+known-problems register. Read it before changing anything substantial.
 
 ```text
-Authenticated SIGAA ─┐
-Public professor SIGAA ─┼─> DuckDB + raw provenance ─> sparse intelligence ─> audiences ─> editable drafts ─> SMTP
-Legacy ledgers/CSV ────┘                              └──────────── Streamlit operator console
+DATA ACQUISITION → NORMALIZATION + PROVENANCE → RESEARCH INTELLIGENCE
+   → SEARCH / MATCHING / LANDSCAPE → PROSPECTING → AUDIENCE
+   → CAMPAIGN → INDIVIDUAL DRAFTS → MANUAL REVIEW → EXPLICIT OUTREACH → HISTORY
 ```
-
-The important separation is **acquisition → intelligence → audience → campaign → delivery**. A campaign recipient always persists the exact qualifying evidence (opportunity/project/plan), rather than a bare `has_bolsa=true` flag.
 
 ## Install
 
 ```powershell
 conda env create -f environment.yml
-conda activate pulsar
+conda activate pegasus
 pip install -e .
 playwright install chromium
-```
-
-Initialize the database:
-
-```powershell
 pulsar init
 ```
 
-### Secrets
-
-The old prototype embedded SIGAA credentials directly in Python. This system deliberately does not. Set them in the shell/session or a local secret manager:
+Credentials live in the environment, never in the repository:
 
 ```powershell
 $env:UFAL_SIGAA_USERNAME="..."
 $env:UFAL_SIGAA_PASSWORD="..."
 ```
 
-SMTP credentials are similarly read from `PULSAR_SMTP_USER` and `PULSAR_SMTP_PASSWORD`. Configure host/from-address in `config/default.toml`.
+`config/default.toml` declares the *names* of those variables and everything else
+that is not a secret. `config/profile.yaml` is your research profile: what you
+work on, how you work, and what you can already do.
 
-## Migration from the existing root files
+## Semantic engine, in one paragraph
 
-If `projects_ledger.json` and `professores_ufal.csv` are still in the repository root:
+PULSAR keeps three kinds of semantic machinery apart, because they answer
+different questions. **Representations** (word/char TF-IDF, SPPMI+SVD, LSA,
+Qwen3-Embedding-4B) induce a geometry and support both retrieval and structure.
+**Retrieval operators** (BM25F) answer query relevance without any geometry.
+**Interpretability models** (NMF topic hierarchy, the skill gazetteer) expose
+structure for navigation. Scores are reported per channel — `lexical_word`,
+`lexical_char`, `bm25f`, `latent`, `neural`, `fused`, `skill_match` — never
+collapsed into a single unexplained number, because the benchmark shows that
+literal recall and thematic affinity have different winners.
 
-```powershell
-pulsar import-legacy
-```
-
-This imports them into DuckDB but keeps the legacy files usable as compatibility/provenance artifacts.
-
-## Synchronization
-
-Authenticated opportunity discovery (safe: **does not apply**):
-
-```powershell
-pulsar sync opportunities
-```
-
-Public professor/Lattes corpus:
+## Daily use
 
 ```powershell
-pulsar sync professors
+pulsar doctor                       # config, credentials, corpus freshness, embedding service
+pulsar sync all                     # acquire everything, then rebuild semantics
+pulsar semantics build              # fit the semantic space + benchmark + score
+pulsar semantics profile            # re-score after editing config/profile.yaml
+pulsar semantics status             # active space/run, benchmarks, map fidelity, topics
+pulsar dashboard                    # the operator console
 ```
 
-The command regenerates `professores_ufal.csv` from the current opportunity database when possible, resolves SIAPEs through the public SIGAA faculty search, archives all seven public professor tabs and detail pages, extracts the embedded Lattes object, and imports the resulting corpus into the main DuckDB database.
-
-Authoritative application-state sync:
+Ad-hoc retrieval, on the fitted space (a query never refits anything):
 
 ```powershell
-pulsar sync applications
+pulsar semantics search "epidemiologia espacial com dados do DATASUS"
+pulsar semantics search "inferência quantitativa em saúde populacional" --entity professor
+pulsar semantics search "citometria de fluxo" --entity opportunity --channel lexical_word
 ```
 
-Complete pipeline:
+Ranked views:
 
 ```powershell
-pulsar sync all
+pulsar opportunities list --funded --limit 25
+pulsar professors list --scope current      # who can supervise this right now
+pulsar professors list --scope trajectory   # who thinks about the same problems
+pulsar professors show 1157495              # portfolio + the evidence behind the rank
 ```
 
-### Explicit application
+## Acquisition
 
-Application is separated from discovery and requires explicit confirmation:
+```powershell
+pulsar sync opportunities   # authenticated SIGAA discovery + detail backfill (never applies)
+pulsar sync professors      # public faculty pages + embedded Lattes, archived and imported
+pulsar sync applications    # authoritative "Meus Registros de Interesse" state
+```
+
+Reading and mutating SIGAA are separate operations. Discovery cannot apply to
+anything. Applying is one opportunity at a time and requires `--confirm`:
 
 ```powershell
 pulsar applications apply 98379721 --confirm
 ```
 
-The Playwright navigation/selectors/JSF bean actions and Windows-1252 detail-fetch code are intentionally conservative ports of the working prototype. Avoid refactoring those internals without live SIGAA regression testing.
+The Playwright navigation, JSF action beans, selectors and Windows-1252 detail
+fetch in `acquisition/sigaa_authenticated.py` are a conservative port of the
+working prototype and are pinned by a contract test. Do not refactor them without
+live regression testing.
 
-## Intelligence engine
+## Campaigns
 
-No transformer embeddings or vector database are required. Rebuild with:
-
-```powershell
-pulsar analyze rebuild
-```
-
-The corpus-native engine combines:
-
-- word TF-IDF (1–2 grams)
-- character TF-IDF (3–5 grams)
-- Latent Semantic Analysis / truncated SVD
-- BM25-style lexical relevance
-- NMF topics
-- K-means thematic clusters
-
-It produces independent similarity components plus a configurable combined score. The underlying signals remain visible and campaign filters can use semantic score, cluster/topic membership, structured metadata, funding, center, and literal research vocabulary. Arbitrary research questions can also be scored on demand without storing embeddings:
+Creating a campaign is not sending it. Creation freezes the audience, the exact
+qualifying evidence, and the semantic provenance that produced the ranking, then
+generates one independently editable draft per recipient.
 
 ```powershell
-pulsar analyze search "epidemiologia espacial DATASUS" --type opportunity
+pulsar campaign audience --funded --min-opportunity-percentile 70 --skill datasus
+pulsar campaign create "PIBIC epidemiologia" --funded --min-opportunity-percentile 70
+pulsar campaign show <id>
+pulsar campaign preview <id>          # writes an HTML preview file
+pulsar campaign select <id> <siape> --deselect
+pulsar campaign send <id>             # dry run: prints what WOULD be sent
+pulsar campaign send <id> --confirm   # actually sends the selected drafts
 ```
 
-## Dashboard
+Messages are sent exactly as stored — templates are never re-rendered at send
+time — and anything already marked `sent` is never sent twice.
+
+## Data layout
+
+```text
+data/pulsar.duckdb              canonical analytical store
+data/public_sigaa/              raw archived public SIGAA + Lattes provenance (expensive; keep)
+data/state/                     ledger journal + professor seed CSV
+data/cache/semantic_spaces/     fitted model artifacts (regenerable)
+data/exports/                   campaign exports and previews
+```
+
+`data/` is git-ignored in full. The raw archives under `data/public_sigaa/` are
+expensive acquired provenance, not build output — back them up, never delete them
+to reclaim space. Everything under `data/cache/` is regenerable.
+
+## Tests
 
 ```powershell
-pulsar dashboard
+pytest
 ```
 
-The Streamlit app reads DuckDB directly and provides:
-
-- overview and concentration/funding metrics
-- opportunity explorer
-- professor explorer
-- semantic landscape/topics
-- campaign audience construction
-- per-recipient draft editing and deselection
-- explicit campaign send control
-
-## Campaign workflow
-
-Create a funded-opportunity campaign:
-
-```powershell
-pulsar campaign create "PIBIC outreach" --funded --center FAMED --min-opportunity-fit 0.30
-```
-
-More targeted selection:
-
-```powershell
-pulsar campaign create "Epidemiologia" \
-  --funded \
-  --center FAMED \
-  --query "epidemiologia de dados públicos do SUS e análise espacial" \
-  --min-query-score 0.25 \
-  --keyword epidemiologia
-```
-
-Inspect exact qualifying projects and rendered drafts:
-
-```powershell
-pulsar campaign preview <campaign_id>
-```
-
-Export:
-
-```powershell
-pulsar campaign export <campaign_id>
-```
-
-Sending is disabled unless explicitly confirmed:
-
-```powershell
-pulsar campaign send <campaign_id> --confirm
-```
-
-The recommended workflow is to create the campaign in CLI or Streamlit, inspect the persisted qualifying evidence, edit individual drafts in Streamlit, deselect recipients as needed, and only then send.
-
-## Useful inspection commands
-
-```powershell
-pulsar doctor
-pulsar professors list
-pulsar professors show 1157495
-pulsar opportunities list --funded
-pulsar campaign list
-```
-
-## Data
-
-The main analytical store is `data/pulsar.duckdb`. Raw public SIGAA snapshots remain under `data/public_sigaa/`; the raw server responses and parsed public dataset are preserved separately from the normalized intelligence tables.
+The suite covers the corpus model, representation determinism, fusion algebra,
+the skill taxonomy, provenance identity separation, staleness detection, and a
+contract test pinning the fragile SIGAA literals.

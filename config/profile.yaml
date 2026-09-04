@@ -1,4 +1,66 @@
+# The operator profile. Only this file's contents affect a `profile_run_id`;
+# editing it never invalidates topics, geometry or benchmarks.
 name: default
+
+# WHAT the research is about.
+domain_interests:
+  - epidemiologia
+  - saúde coletiva e saúde pública
+  - informática em saúde
+  - vigilância em saúde e doenças transmissíveis
+  - reumatologia
+  - neurologia
+  - anestesiologia e dor
+  - medicina cardiovascular
+  - pesquisa clínica
+  - determinantes sociais da saúde
+
+# HOW the research is done.
+method_interests:
+  - bioestatística e modelagem estatística
+  - análise espacial e geoprocessamento
+  - séries temporais e análise de tendência
+  - análise de dados secundários e registros administrativos
+  - revisão sistemática e metanálise
+  - aprendizado de máquina aplicado à saúde
+  - construção e curadoria de bases de dados
+  - estudos observacionais (coorte, caso-controle, ecológico)
+
+# WHAT the student would actually do or already knows how to do.
+skill_interests:
+  - Python
+  - R
+  - SQL
+  - DATASUS, SINAN, SIH/SUS, SIA/SUS, SIM, SINASC
+  - automação de fluxos de pesquisa
+  - visualização de dados e dashboards
+  - redação científica e elaboração de protocolos
+
+# Skills matched deterministically against the extracted skill taxonomy.
+# Valid ids come from `pulsar semantics skills --list`.
+skill_ids:
+  - python
+  - r_lang
+  - sql
+  - datasus
+  - sinan
+  - sih_sia
+  - sim_sinasc
+  - ibge
+  - biostatistics
+  - regression
+  - spatial_stats
+  - time_series
+  - epi_design
+  - systematic_review
+  - meta_analysis
+  - machine_learning
+  - geoprocessing
+  - web_dev
+  - data_management
+  - literature_db
+
+# Free-text fallback used whenever a facet above is empty.
 semantic_profile: >-
   Medicina, epidemiologia, ciência de dados, bioestatística, informática em saúde,
   DATASUS, sistemas de informação em saúde, análise espacial, análise temporal,
@@ -7,6 +69,7 @@ semantic_profile: >-
   revisão sistemática, metanálise, protocolos, bases de dados, modelagem estatística
   e análise de dados públicos do SUS.
 
+# Sent verbatim to SIGAA when an application is explicitly confirmed.
 qualifications_text: |-
   Sou acadêmico de Medicina da Universidade Federal de Alagoas (UFAL), com atuação em iniciação científica e pesquisa aplicada nas interfaces entre epidemiologia, ciência de dados, informática em saúde e pesquisa clínica. Possuo experiência com Python e R, automação de fluxos de pesquisa, bases públicas de saúde, análise estatística, revisão de literatura, elaboração de protocolos, construção e gerenciamento de bases de dados, visualização e interpretação de resultados e redação científica.
 

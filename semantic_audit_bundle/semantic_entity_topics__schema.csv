@@ -1,8 +1,0 @@
-column_name,column_type,null,key,default,extra
-model_id,VARCHAR,YES,,,
-entity_type,VARCHAR,YES,,,
-entity_id,VARCHAR,YES,,,
-space,VARCHAR,YES,,,
-topic_id,BIGINT,YES,,,
-weight,DOUBLE,YES,,,
-analyzed_at,VARCHAR,YES,,,

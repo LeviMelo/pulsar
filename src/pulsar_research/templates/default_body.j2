@@ -1,7 +1,9 @@
 Olá, {{ professor_name }},
 
-Meu nome é Levi de Melo Amorim, acadêmico de Medicina da FAMED/UFAL. Estou entrando em contato porque identifiquei no SIGAA a oportunidade vinculada ao projeto “{{ primary.project_title or primary.plan_title }}”{% if primary.plan_title and primary.plan_title != primary.project_title %}, com o plano de trabalho “{{ primary.plan_title }}”{% endif %}{% if primary.funded_slots %}, atualmente com {{ primary.funded_slots }} vaga(s) com bolsa indicada(s) no sistema{% endif %}.
+Meu nome é Levi de Melo Amorim, acadêmico de Medicina da FAMED/UFAL. Identifiquei no SIGAA a oportunidade vinculada ao projeto “{{ primary.project_title or primary.plan_title }}”{% if primary.plan_title and primary.plan_title != primary.project_title %}, com o plano de trabalho “{{ primary.plan_title }}”{% endif %}{% if primary.funded_slots %}, atualmente com {{ primary.funded_slots }} vaga(s) com bolsa indicada(s) no sistema{% endif %}.
 
-A temática me chamou atenção pela proximidade com meus interesses e experiência em pesquisa quantitativa, epidemiologia, ciência de dados e informática em saúde. Gostaria de saber se ainda há possibilidade de participação e se seria oportuno conversarmos brevemente sobre o projeto e as atividades previstas.
+A temática se aproxima bastante do que venho desenvolvendo{% if matched_skills %}, especialmente no que envolve {{ matched_skills[:4]|join(', ') }}{% endif %}. Tenho experiência com pesquisa quantitativa, epidemiologia, ciência de dados e informática em saúde, e gostaria de saber se ainda há possibilidade de participação e se seria oportuno conversarmos brevemente sobre o projeto e as atividades previstas.
+
+Fico à disposição para enviar meu currículo e conversar no melhor formato para o senhor(a).
 
 {% if signature %}{{ signature }}{% endif %}
