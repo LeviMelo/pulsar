@@ -68,6 +68,14 @@ class AppConfig:
             )
         with cfg_path.open("rb") as fh:
             raw = tomllib.load(fh)
+        # `config/local.toml` is git-ignored and overrides the tracked defaults.
+        # Personal, machine-specific settings (the address you send from, an
+        # alternate embedding host) belong there rather than in a shared file.
+        # It holds settings, never secrets: those stay in the environment.
+        local_path = root_path / "config" / "local.toml"
+        if local_path.exists():
+            with local_path.open("rb") as fh:
+                raw = _deep_merge(raw, tomllib.load(fh))
         return cls(root_path, raw)
 
     # -- sections ------------------------------------------------------------
@@ -105,6 +113,17 @@ class AppConfig:
             self.paths.data_dir / "raw",
         ):
             path.mkdir(parents=True, exist_ok=True)
+
+
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Recursive dict merge; `override` wins at the leaves."""
+    out = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _deep_merge(out[key], value)
+        else:
+            out[key] = value
+    return out
 
 
 def discover_root(root: Path | str | None = None) -> Path:

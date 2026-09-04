@@ -36,8 +36,23 @@ $env:UFAL_SIGAA_PASSWORD="..."
 ```
 
 `config/default.toml` declares the *names* of those variables and everything else
-that is not a secret. `config/profile.yaml` is your research profile: what you
-work on, how you work, and what you can already do.
+that is not a secret. `config/local.toml` is a git-ignored overlay for personal,
+machine-specific settings — the address you send from, an alternate embedding
+host — deep-merged over the defaults, so the tracked file stays generic. Copy
+`config/local.toml.example` to start. `config/profile.yaml` is your research
+profile: what you work on, how you work, and what you can already do.
+
+To send mail, set the address in `config/local.toml` and the credentials in the
+environment:
+
+```powershell
+$env:PULSAR_SMTP_USER="your.name@famed.ufal.br"
+$env:PULSAR_SMTP_PASSWORD="<16-character Google App Password>"
+```
+
+UFAL is on Google Workspace, so submission goes through `smtp.gmail.com:587`
+with your institutional identity and an App Password — an account password will
+be rejected. `pulsar doctor` names whichever piece is still missing.
 
 ## Semantic engine, in one paragraph
 

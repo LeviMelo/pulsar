@@ -1,0 +1,13 @@
+# config/local.toml — personal, machine-specific settings. Git-ignored.
+# Deep-merged over config/default.toml, so state only what differs.
+# Settings only: secrets stay in environment variables named by the config.
+
+[smtp]
+# UFAL runs on Google Workspace (MX -> ASPMX.L.GOOGLE.COM), so institutional
+# mail goes out through Gmail's submission host with your @ufal.br identity.
+host = "smtp.gmail.com"
+port = 587
+starttls = true
+from_address = "seu.nome@famed.ufal.br"
+from_name = "Levi de Melo Amorim"
+reply_to = "seu.nome@famed.ufal.br"

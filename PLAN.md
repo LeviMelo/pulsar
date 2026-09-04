@@ -128,7 +128,10 @@ sent; a message marked `sent` is never re-sent; `campaign send` without
 `--confirm` is a dry run that prints what would go out.
 
 **Secrets** never enter source control. `config/default.toml` declares the *names*
-of environment variables; values live in the environment or `.env`.
+of environment variables; values live in the environment or `.env`. Personal but
+non-secret settings — the address you send from — go in the git-ignored
+`config/local.toml`, which is deep-merged over the tracked defaults so a shared
+file never carries one operator's identity.
 
 ### 3.4 Explainability is a first-class feature
 
@@ -151,6 +154,7 @@ Cosine similarities and rank-fusion outputs are not calibrated. The UI shows
 ```text
 config/
   default.toml                 non-secret configuration; every semantics key is hashed into space_id
+  local.toml                   git-ignored personal overlay, deep-merged over default.toml
   profile.yaml                 the operator profile (domain / methods / skills / skill_ids)
 src/pulsar_research/
   cli.py                       Typer CLI, grouped by pipeline stage

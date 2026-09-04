@@ -20,3 +20,6 @@ data/
 # Never commit patch-installer debris again.
 .pulsar-backups/
 .pulsar_patch_backups/
+
+# Personal, machine-specific configuration (never shared).
+config/local.toml

@@ -41,3 +41,30 @@ def test_staleness_is_detected_when_the_corpus_moves(db):
 
 def test_no_space_reads_as_stale(db):
     assert check_staleness(db, "anything").is_stale
+
+
+def test_local_config_overrides_defaults_without_touching_the_tracked_file(tmp_path, monkeypatch):
+    """Personal settings live in a git-ignored overlay, merged key by key."""
+    import tomllib
+
+    from pulsar_research.config import AppConfig
+
+    root = tmp_path / "proj"
+    (root / "config").mkdir(parents=True)
+    tracked = root / "config" / "default.toml"
+    tracked.write_text(
+        '[smtp]\nhost = ""\nport = 587\nstarttls = true\n'
+        '[semantics]\nlsa_components = 384\n', encoding="utf-8")
+
+    plain = AppConfig.load(root)
+    assert plain.smtp["host"] == "" and plain.semantics["lsa_components"] == 384
+
+    (root / "config" / "local.toml").write_text(
+        '[smtp]\nhost = "smtp.gmail.com"\nfrom_address = "levi@famed.ufal.br"\n', encoding="utf-8")
+    merged = AppConfig.load(root)
+    assert merged.smtp["host"] == "smtp.gmail.com"
+    assert merged.smtp["from_address"] == "levi@famed.ufal.br"
+    assert merged.smtp["port"] == 587, "keys the overlay omits must survive the merge"
+    assert merged.semantics["lsa_components"] == 384, "untouched sections must survive"
+    assert tomllib.loads(tracked.read_text(encoding="utf-8"))["smtp"]["host"] == "", \
+        "the tracked file must not be modified"
