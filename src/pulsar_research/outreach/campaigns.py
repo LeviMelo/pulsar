@@ -34,6 +34,7 @@ def create_campaign(
     theme: str = "default_email.html",
     corpus_fingerprint: str | None = None,
     allow_stale: bool = False,
+    attachments: list[Path] | None = None,
 ) -> tuple[str, int]:
     """Build an audience and persist one personalized draft per recipient."""
     if corpus_fingerprint and not allow_stale:
@@ -69,7 +70,7 @@ def create_campaign(
         try:
             _write_campaign(con, campaign_id, name, query, provenance, subject_template,
                             body_template, theme, audience, signature, profile, now,
-                            corpus_stats=corpus_stats)
+                            corpus_stats=corpus_stats, attachments=attachments)
         except Exception:
             con.execute("ROLLBACK")
             raise
@@ -113,15 +114,16 @@ def _corpus_stats(db: Database) -> dict[str, Any]:
 
 def _write_campaign(con, campaign_id, name, query, provenance, subject_template,
                     body_template, theme, audience, signature, profile, now,
-                    corpus_stats=None) -> None:
+                    corpus_stats=None, attachments=None) -> None:
     # Columns are named, not positional: a store migrated from v2 has the
     # widened outreach columns appended at the end, so VALUES(...) would
     # write the rationale into `selection_score`.
     con.execute(
         "INSERT INTO campaigns (campaign_id, name, audience_query_json, provenance_json, "
-        "subject_template, body_template, theme, status, created_at, updated_at) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        "attachments_json, subject_template, body_template, theme, status, "
+        "created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         [campaign_id, name, json_text(query.to_dict()), json_text(provenance),
+         json_text([str(Path(a).resolve()) for a in (attachments or ())]),
          subject_template, body_template, theme, "draft", now, now])
     for recipient in audience:
         con.execute(

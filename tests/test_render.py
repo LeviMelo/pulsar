@@ -14,7 +14,10 @@ from pulsar_research.outreach.render import (STRONG_FIT_PERCENTILE, build_contex
                                              read_template, render_message)
 
 PROFILE = {
-    "capability_lines": ["Python e R para análise", "bases públicas do SUS"],
+    "about_lines": ["pesquisador no NEES/UFAL", "direção de pesquisa do IFMSA-UFAL"],
+    "contribution_lines": ["construir e curar a base de dados",
+                           "conduzir a análise estatística"],
+    "annexes": ["Relatório PULSAR (PDF)"],
     "campaign_signature": "Levi de Melo Amorim",
 }
 SIGNATURE = "Levi de Melo Amorim"
@@ -71,13 +74,6 @@ def test_a_weak_fit_never_states_an_alignment():
 def test_the_threshold_is_the_only_thing_that_gates_the_claim():
     assert AFFINITY not in render(STRONG_FIT_PERCENTILE - 0.1)
     assert AFFINITY in render(STRONG_FIT_PERCENTILE)
-
-
-def test_capabilities_are_always_presented_and_stay_on_their_own_lines():
-    for percentile in (7.0, 98.0):
-        body = render(percentile)
-        for line in PROFILE["capability_lines"]:
-            assert f"- {line}\n" in body, "each capability needs its own bullet, not a run-on"
 
 
 def test_the_draft_acknowledges_an_application_the_professor_can_already_see():

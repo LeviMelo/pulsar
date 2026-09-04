@@ -73,12 +73,29 @@ semantic_profile: >-
 # your own words rather than generated, because this is the part of a cold email
 # a professor actually reads. Keep each line short and specific: a capability
 # someone could ask you to demonstrate next week.
-capability_lines:
+# WHO I AM — milestones and standing roles. Establishes that the work can be
+# trusted to me. Never presented as "what I would do on your project".
+about_lines:
   - "pesquisador no NEES/UFAL, como especialista de domínio em sistemas de informação em saúde e no tratamento de bases públicas do SUS"
-  - "projeto multicêntrico de reumatologia no PIC/HU Brasil, sob orientação do Prof. Thiago Sotero Fragoso — derivação e validação de uma versão do SLE-DAS sem marcadores sorológicos, na qual respondo pela harmonização dos dados entre os centros e pelo desenho estatístico da validação"
-  - "revisão metodológica de estudos ecológicos com dados do SINAN, incluindo análise de tendência temporal e autocorrelação espacial"
-  - "direção de pesquisa do IFMSA-UFAL, com capacitação da equipe em revisões sistemáticas e metanálises"
-  - "Python e R, automação de fluxos de pesquisa e processamento de grandes bases públicas — DATASUS, SIDRA, SINAN, SIH/SIA, SIM/SINASC e IBGE"
+  - "projeto multicêntrico de reumatologia no PIC/HU Brasil, sob orientação do Prof. Thiago Sotero Fragoso — derivação e validação de uma versão do SLE-DAS sem marcadores sorológicos, respondendo pela harmonização dos dados entre os centros e pelo desenho estatístico da validação"
+  - "direção de pesquisa do IFMSA-UFAL, conduzindo a capacitação metodológica da equipe em revisões sistemáticas e metanálises; direção do projeto de extensão HEMOMAIS (UNIMA)"
+  - "cofundador e diretor da Liga Acadêmica de Cirurgia Cardiovascular da UFAL; integrante das ligas de Reumatologia, Neurologia e Neurocirurgia, Anestesiologia, Neurointensivismo e Clínica Médica"
+  - "revisão metodológica de estudos ecológicos com dados do SINAN, incluindo tendência temporal e autocorrelação espacial"
+  - "formação técnica prévia em Eletroeletrônica pelo IFAL; menção honrosa e medalha de bronze na OBMEP"
+
+# WHAT I WOULD DO — concrete tasks I can take off an orientador's hands on
+# essentially any quantitative or clinical project. Written as verbs, not nouns.
+contribution_lines:
+  - "construir e curar a base de dados do projeto, incluindo integração de fontes e controle de qualidade"
+  - "conduzir a análise estatística — desenho, modelagem de regressão, séries temporais e análise espacial — em Python ou R, de forma reprodutível"
+  - "estruturar a revisão de literatura e redigir o protocolo, com a estratégia de busca documentada"
+  - "automatizar a extração e o processamento de bases públicas quando o projeto as utilizar (DATASUS, SINAN, SIH/SIA, SIM/SINASC, SIDRA, IBGE)"
+  - "preparar figuras, tabelas e o texto para submissão, e manter a documentação do estudo"
+
+# Listed in the outreach body. Must correspond to what `campaign create --attach`
+# actually attaches; the wording here is what the professor reads.
+annexes:
+  - "Relatório técnico do PULSAR — construção do corpus, estrutura temática e avaliação de recuperação semântica (PDF)"
 
 # Sent verbatim to SIGAA when an application is explicitly confirmed.
 qualifications_text: |-

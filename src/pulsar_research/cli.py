@@ -658,6 +658,7 @@ def campaign_audience(
 @campaign_app.command("create")
 def campaign_create(
     name: str,
+    attach: list[Path] = typer.Option([], "--attach", help="Annex a file to every message"),
     center: list[str] = typer.Option([], "--center"),
     funded: bool = typer.Option(True, "--funded/--any-funding"),
     min_current: Optional[float] = typer.Option(None, "--min-current-percentile"),
@@ -680,8 +681,11 @@ def campaign_create(
                             min_current_percentile=min_current,
                             min_opportunity_percentile=min_opportunity,
                             exclude_already_contacted=not include_contacted, limit=limit)
+    for path in attach:
+        if not path.is_file():
+            raise typer.BadParameter(f"attachment not found: {path}")
     campaign_id, n = create_campaign(
-        config, db, name, query,
+        config, db, name, query, attachments=list(attach),
         subject_template=subject_template.read_text(encoding="utf-8") if subject_template else None,
         body_template=body_template.read_text(encoding="utf-8") if body_template else None,
         corpus_fingerprint=load_corpus(db).fingerprint(), allow_stale=allow_stale,

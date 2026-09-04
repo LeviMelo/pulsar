@@ -303,6 +303,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     name VARCHAR,
     audience_query_json VARCHAR,
     provenance_json VARCHAR,
+    attachments_json VARCHAR,
     subject_template VARCHAR,
     body_template VARCHAR,
     theme VARCHAR,
@@ -378,6 +379,10 @@ class Database:
             report["rebuilt"] = _reconcile_derived(con, existing)
             for block in (ACQUIRED_SCHEMA, DERIVED_SCHEMA, PROFESSOR_METRICS_SCHEMA, OUTREACH_SCHEMA):
                 con.execute(block)
+            # A populated outreach table is never dropped, so it can only gain
+            # columns by ALTER. Done on every run against the declared DDL rather
+            # than gated on a version number, which someone always forgets to bump.
+            report["widened"] = _widen_outreach(con)
             previous = con.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
             previous_version = str(previous[0]) if previous else "0"
             if previous_version != SCHEMA_VERSION:
@@ -484,6 +489,29 @@ def _reconcile_derived(con, existing: set[str]) -> list[str]:
     return rebuilt
 
 
+def _widen_outreach(con) -> list[str]:
+    """Add any declared outreach column the live table is missing."""
+    added: list[str] = []
+    types = {"attachments_json": "VARCHAR", "provenance_json": "VARCHAR", "theme": "VARCHAR",
+             "rationale_json": "VARCHAR", "body_html": "VARCHAR", "body_text": "VARCHAR"}
+    for table, expected in OUTREACH_TABLES.items():
+        live = {r[0] for r in con.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name=?",
+            [table]).fetchall()}
+        if not live:
+            continue
+        for column in expected:
+            if column in live:
+                continue
+            try:
+                con.execute(f'ALTER TABLE "{table}" ADD COLUMN "{column}" '
+                            f'{types.get(column, "VARCHAR")}')
+                added.append(f"{table}.{column}")
+            except Exception:
+                pass
+    return added
+
+
 def _migrate(con, previous_version: str, existing: set[str]) -> dict[str, Any]:
     """Forward-only migration. Derived tables are dropped, facts are preserved."""
     dropped: list[str] = []
@@ -495,6 +523,7 @@ def _migrate(con, previous_version: str, existing: set[str]) -> dict[str, Any]:
         con.execute(PROFESSOR_METRICS_SCHEMA)
         for table, column, ddl in (
             ("campaigns", "provenance_json", "VARCHAR"),
+            ("campaigns", "attachments_json", "VARCHAR"),
             ("campaigns", "theme", "VARCHAR"),
             ("campaign_recipients", "rationale_json", "VARCHAR"),
             ("campaign_messages", "body_html", "VARCHAR"),

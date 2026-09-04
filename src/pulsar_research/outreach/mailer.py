@@ -14,6 +14,8 @@ SMTP is one provider behind an interface, not an architectural commitment.
 
 from __future__ import annotations
 
+import json
+import mimetypes
 import os
 import smtplib
 import ssl
@@ -21,10 +23,14 @@ import time
 from dataclasses import dataclass
 from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
+from pathlib import Path
 from typing import Any, Iterable, Protocol
 
 from ..config import AppConfig
 from ..db import Database, utcnow
+
+
+MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024  # Gmail rejects over ~25 MB
 
 
 @dataclass(slots=True)
@@ -35,6 +41,7 @@ class OutgoingMessage:
     subject: str
     body_text: str
     body_html: str
+    attachments: tuple[Path, ...] = ()
 
 
 class MailProvider(Protocol):
@@ -110,6 +117,12 @@ class SMTPProvider:
         msg.set_content(message.body_text)
         if message.body_html:
             msg.add_alternative(message.body_html, subtype="html")
+        for path in message.attachments:
+            data = Path(path).read_bytes()
+            ctype, _ = mimetypes.guess_type(str(path))
+            maintype, _, subtype = (ctype or "application/octet-stream").partition("/")
+            msg.add_attachment(data, maintype=maintype, subtype=subtype or "octet-stream",
+                               filename=Path(path).name)
         self._server.send_message(msg)
         return message_id
 
@@ -127,11 +140,34 @@ def pending_messages(db: Database, campaign_id: str) -> list[OutgoingMessage]:
         """,
         [campaign_id],
     )
+    attachments = campaign_attachments(db, campaign_id)
     return [
         OutgoingMessage(str(r.siape), str(r.professor_name or ""), str(r.email),
-                        str(r.subject or ""), str(r.body_text or ""), str(r.body_html or ""))
+                        str(r.subject or ""), str(r.body_text or ""), str(r.body_html or ""),
+                        attachments)
         for r in rows.itertuples()
     ]
+
+
+def campaign_attachments(db: Database, campaign_id: str) -> tuple[Path, ...]:
+    """The campaign's annexes, verified to still exist and to fit in one message.
+
+    Checked here rather than at send time for each recipient: discovering a
+    missing file on recipient 40 of 62 leaves half a campaign delivered without
+    the evidence it refers to.
+    """
+    raw = db.scalar("SELECT attachments_json FROM campaigns WHERE campaign_id=?",
+                    [campaign_id], "")
+    paths = [Path(p) for p in json.loads(raw)] if raw else []
+    missing = [str(p) for p in paths if not p.is_file()]
+    if missing:
+        raise FileNotFoundError(f"campaign attachment(s) no longer on disk: {', '.join(missing)}")
+    total = sum(p.stat().st_size for p in paths)
+    if total > MAX_TOTAL_ATTACHMENT_BYTES:
+        raise ValueError(
+            f"attachments total {total / 1e6:.1f} MB, over the "
+            f"{MAX_TOTAL_ATTACHMENT_BYTES / 1e6:.0f} MB limit most providers enforce")
+    return tuple(paths)
 
 
 def send_campaign(
@@ -159,6 +195,7 @@ def send_campaign(
             "dry_run": True,
             "confirmed": bool(confirm),
             "provider": provider.describe(),
+            "attachments": [p.name for p in (messages[0].attachments if messages else ())],
             "recipients": [{"siape": m.siape, "name": m.to_name, "email": m.to_email,
                             "subject": m.subject} for m in messages],
         }

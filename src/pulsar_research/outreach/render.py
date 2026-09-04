@@ -74,7 +74,13 @@ def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping
         "opportunity_percentile": percentile,
         "fit_is_strong": percentile >= STRONG_FIT_PERCENTILE,
         "already_applied": bool(rationale.get("already_applied")),
+        # Deliberately two lists, never one. Credentials say the work can be
+        # trusted to him; contributions say what work he would actually take on.
+        # A single list under either heading answers the wrong question.
+        "about_lines": list(profile.get("about_lines") or []),
+        "contribution_lines": list(profile.get("contribution_lines") or []),
         "capability_lines": list(profile.get("capability_lines") or []),
+        "annexes": list(profile.get("annexes") or []),
         "signature": signature,
         "sender_name": profile.get("sender_name") or (signature.splitlines() or [""])[0],
         # Measured at campaign-creation time and frozen into the snapshot, so a
