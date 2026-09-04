@@ -88,7 +88,6 @@ def rebuild_analysis(config: AppConfig) -> dict[str, Any]:
         weight_lsa=float(a.get("weight_lsa", 0.55)),
         weight_tfidf=float(a.get("weight_tfidf", 0.25)),
         weight_bm25=float(a.get("weight_bm25", 0.20)),
-        topic_reference_mask=[d["entity_type"] == "opportunity" for d in docs],
     )
     now = utcnow()
     with db.connect() as con:
