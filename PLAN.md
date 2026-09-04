@@ -811,7 +811,9 @@ while the dashboard is open on the same database.
 | CLI rebuild | **done** |
 | Dashboard rebuild | **done** |
 | Campaign snapshot + HTML rendering + dry-run send | **done** |
-| Test suite | **done** — 37 tests |
+| Test suite | **done** — 42 tests |
+| Acquisition journal (`sync_runs`) | **done** — every sync entry point records start, finish, status and details, including failures; `doctor` shows the latest per source |
+| Delivery path | **done** — verified against an in-process SMTP sink |
 | End-to-end verification | **done** — `init` migration, `semantics build` (space + topics + landscape + skills + 7-task battery + profile run + metrics), `doctor`, ranked opportunity/professor views, audience → campaign → preview → dry-run send, all 21 dashboard queries, Streamlit serving |
 | Live SIGAA regression against the portal | **not re-run this session** (§20) |
 | SMTP end-to-end send | **not exercised** — no SMTP host configured; the dry run is verified |
@@ -825,7 +827,10 @@ while the dashboard is open on the same database.
    live portal. The contract test pins the literals; it does not prove the flow.
    **Next operator action: run `pulsar sync applications` first** — it is the
    read-only path that exercises login, notice bypass and menu navigation.
-2. **SMTP is unconfigured**, so the send path has only been exercised as a dry run.
+2. **SMTP is unconfigured on this machine**, so no message has gone to a real
+   address. The delivery path itself is covered end to end by `tests/test_mailer.py`,
+   which runs a real SMTP session against an in-process sink and asserts the MIME
+   structure, the selected-only rule, the no-resend rule and failure recording.
 3. **`cross_project_area` uses a weak label.** CNPq area strings are coarse and
    inconsistently filled; treat that task's absolute numbers as indicative.
 4. **Map fidelity is genuinely weak and shown as such.** SMACOF improves on PCoA
@@ -837,19 +842,18 @@ while the dashboard is open on the same database.
 5. **Professor `methods`/`skills` facets only exist for professors who currently
    offer work plans.** Lattes gives no methodology text. This is a data limit, not
    a bug, but the UI should say so more loudly than it does.
-6. **`sync_runs` is still never written.** Acquisition should log runs there.
-7. **No outcome tracking.** History records what was sent, not what came back
+6. **No outcome tracking.** History records what was sent, not what came back
    (reply, meeting, acceptance). §21.
-8. **Single-letter skill matching is heuristic.** The capital-`R` rule is right
+7. **Single-letter skill matching is heuristic.** The capital-`R` rule is right
    nearly always; the exclusion list is empirical and will need extending.
-9. **`joint_svd` fusion is implemented and benchmarked but not the default.** See
+8. **`joint_svd` fusion is implemented and benchmarked but not the default.** See
    §22 for the decision.
-10. **Root topic count is 3 per facet**, at the floor of the configured range. The
+9. **Root topic count is 3 per facet**, at the floor of the configured range. The
     hierarchy that results is genuinely interpretable (public health / EB wounds /
     cellular effects, each splitting into four), but the selection score should be
     inspected across a wider `topic_max_k` before trusting 3 as the answer rather
     than the boundary.
-11. **`current` and `trajectory` still correlate at Spearman 0.82.** That appears
+10. **`current` and `trajectory` still correlate at Spearman 0.82.** That appears
     substantive — professors whose careers align also tend to run aligned projects
     — but it means the two scopes are most useful for their *evidence*, which now
     overlaps only 34%, rather than for producing different shortlists.
@@ -859,7 +863,6 @@ while the dashboard is open on the same database.
 ## 21. Future work
 
 **Near term**
-- Log acquisition runs into `sync_runs`; surface the last successful sync per source.
 - Outcome tracking: reply / meeting / accepted / declined per campaign recipient,
   and a retrospective view of which evidence actually predicted a reply.
 - Extend the skill gazetteer from `--discover` output after each sync.

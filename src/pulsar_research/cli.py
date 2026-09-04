@@ -19,6 +19,7 @@ import json
 import os
 import subprocess
 import sys
+from uuid import uuid4
 from pathlib import Path
 from typing import Optional
 
@@ -27,7 +28,7 @@ from rich.console import Console
 from rich.table import Table
 
 from .config import AppConfig
-from .db import Database, json_load
+from .db import Database, json_load, json_text, utcnow
 
 app = typer.Typer(help="PULSAR — local research intelligence and opportunity prospecting",
                   no_args_is_help=True)
@@ -54,6 +55,62 @@ def ctx() -> tuple[AppConfig, Database]:
     db = Database(config.paths.database)
     db.initialize()
     return config, db
+
+
+def _last_sync_summary(db: Database) -> str:
+    """Most recent journal entry per source, so a silent failure is visible."""
+    rows = db.query_df(
+        "SELECT source, status, finished_at FROM sync_runs r WHERE finished_at = "
+        "(SELECT MAX(finished_at) FROM sync_runs x WHERE x.source = r.source) ORDER BY source")
+    if not len(rows):
+        return "[yellow]never — no acquisition has been journalled[/yellow]"
+    parts = []
+    for r in rows.itertuples():
+        colour = "green" if r.status == "ok" else "red"
+        parts.append(f"{r.source}: [{colour}]{r.status}[/{colour}] {str(r.finished_at)[:16]}")
+    return " · ".join(parts)
+
+
+def _smtp_summary(config: AppConfig) -> str:
+    """SMTP readiness, split into the three things that are separately missing."""
+    smtp = config.smtp
+    host = smtp.get("host") or ""
+    sender = smtp.get("from_address") or ""
+    user = os.getenv(smtp.get("username_env", "PULSAR_SMTP_USER"), "")
+    password = os.getenv(smtp.get("password_env", "PULSAR_SMTP_PASSWORD"), "")
+    missing = [label for label, present in (
+        ("host", host), ("from_address", sender),
+        (smtp.get("username_env", "PULSAR_SMTP_USER"), user),
+        (smtp.get("password_env", "PULSAR_SMTP_PASSWORD"), password),
+    ) if not present]
+    if missing:
+        return f"[yellow]not ready — missing {', '.join(missing)}[/yellow]"
+    return f"[green]ready[/green] {sender} via {host}:{smtp.get('port', 587)}"
+
+
+def _sync(db: Database, source: str, operation):
+    """Run one acquisition step and journal it into `sync_runs`, either way.
+
+    A crawl that died halfway is the run you most want a record of, so the
+    failure path writes its row before re-raising.
+    """
+    run_id = uuid4().hex[:12]
+    started = utcnow()
+
+    def journal(status: str, details: dict) -> None:
+        with db.connect() as con:
+            con.execute(
+                "INSERT INTO sync_runs (run_id, source, started_at, finished_at, status, details_json) "
+                "VALUES (?,?,?,?,?,?)",
+                [run_id, source, started, utcnow(), status, json_text(details)])
+
+    try:
+        result = operation()
+    except Exception as exc:
+        journal("failed", {"error": f"{type(exc).__name__}: {exc}"})
+        raise
+    journal("ok", result if isinstance(result, dict) else {"result": str(result)})
+    return result
 
 
 def _print_df(df, *, empty: str = "No rows.") -> None:
@@ -108,7 +165,8 @@ def doctor() -> None:
          "set" if os.getenv(sigaa.get("username_env", "UFAL_SIGAA_USERNAME")) else "[yellow]missing[/yellow]"),
         ("SIGAA password env",
          "set" if os.getenv(sigaa.get("password_env", "UFAL_SIGAA_PASSWORD")) else "[yellow]missing[/yellow]"),
-        ("SMTP host", config.smtp.get("host") or "[yellow]not configured[/yellow]"),
+        ("Last sync", _last_sync_summary(db)),
+        ("SMTP", _smtp_summary(config)),
         ("Professor seed CSV",
          str(config.paths.professors_csv) if config.paths.professors_csv.exists() else "[yellow]missing[/yellow]"),
     ]
@@ -157,17 +215,17 @@ def import_ledger_cmd(path: Optional[Path] = typer.Option(None, "--path")) -> No
 @sync_app.command("opportunities")
 def sync_opportunities_cmd() -> None:
     """Authenticated SIGAA discovery and detail backfill. Never applies to anything."""
-    config, _ = ctx()
+    config, db = ctx()
     from .acquisition.sigaa_authenticated import sync_opportunities
-    console.print(sync_opportunities(config))
+    console.print(_sync(db, "opportunities", lambda: sync_opportunities(config)))
 
 
 @sync_app.command("applications")
 def sync_applications_cmd() -> None:
     """Synchronize the authoritative 'Meus Registros de Interesse' state."""
-    config, _ = ctx()
+    config, db = ctx()
     from .acquisition.sigaa_authenticated import sync_applications
-    console.print(sync_applications(config))
+    console.print(_sync(db, "applications", lambda: sync_applications(config)))
 
 
 @sync_app.command("professors")
@@ -186,7 +244,8 @@ def sync_professors_cmd(
             export_professors_csv_for_scraper(db, seed)
         elif not seed.exists():
             raise typer.BadParameter("No opportunities in DuckDB and no professor seed CSV exists")
-    console.print(sync_professors(config, input_csv=seed, refresh=refresh, detail_depth=detail_depth))
+    console.print(_sync(db, "professors", lambda: sync_professors(
+        config, input_csv=seed, refresh=refresh, detail_depth=detail_depth)))
 
 
 @sync_app.command("all")
@@ -198,13 +257,14 @@ def sync_all_cmd(refresh_public: bool = typer.Option(False, "--refresh-public"))
     from .acquisition.sigaa_public import sync_professors
 
     console.rule("1/4 authenticated opportunities")
-    console.print(sync_opportunities(config))
+    console.print(_sync(db, "opportunities", lambda: sync_opportunities(config)))
     export_professors_csv_for_scraper(db, config.paths.professors_csv)
     console.rule("2/4 public professor corpus")
-    console.print(sync_professors(config, input_csv=config.paths.professors_csv, refresh=refresh_public))
+    console.print(_sync(db, "professors", lambda: sync_professors(
+        config, input_csv=config.paths.professors_csv, refresh=refresh_public)))
     resolve_opportunity_professors(db)
     console.rule("3/4 applications")
-    console.print(sync_applications(config))
+    console.print(_sync(db, "applications", lambda: sync_applications(config)))
     console.rule("4/4 semantics")
     semantics_build()
 
