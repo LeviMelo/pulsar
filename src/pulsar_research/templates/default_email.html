@@ -1,5 +1,19 @@
-{# PULSAR email theme. Inline CSS only: Gmail/Outlook strip <style> unpredictably
-   and no client runs JavaScript. Nothing here loads an external asset. #}
+{# PULSAR email theme.
+
+   Deliberately almost nothing. An earlier version wrapped the message in a
+   rounded white card on a grey page in a serif face, which looked like a
+   newsletter, and — because the body was a stack of styled blocks — pasted into
+   a reply as a mess. A cold academic email should paste cleanly and read like
+   mail, so the body here is plain paragraphs in the reader's own default size,
+   with no background, no border and no table around it.
+
+   The one deliberate piece of HTML is the footer card. It is self-contained,
+   sits after the signature where it cannot interrupt the message, and carries
+   the measurements that used to clutter the body. Its plaintext equivalent is
+   `panels.card_lines`, rendered into the text alternative from the same values.
+
+   Inline CSS only: Gmail and Outlook strip <style> unpredictably, and no client
+   runs JavaScript. Nothing here loads an external asset. #}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -7,36 +21,43 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ subject }}</title>
 </head>
-<body style="margin:0;padding:0;background:#f4f6f8;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;padding:24px 12px;">
-  <tr><td align="center">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border:1px solid #e2e7ec;border-radius:10px;">
-      <tr><td style="padding:26px 30px 8px 30px;font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.6;color:#1d252d;">
-        {{ body_html }}
-      </td></tr>
-      {% if primary and primary.plan_title %}
-      <tr><td style="padding:4px 30px 8px 30px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f9fb;border:1px solid #e2e7ec;border-radius:8px;">
-          <tr><td style="padding:14px 16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.5;color:#41505e;">
-            <div style="text-transform:uppercase;letter-spacing:.08em;font-size:10px;color:#7a8a99;font-weight:bold;">Oportunidade referida</div>
-            <div style="margin-top:5px;color:#1d252d;font-weight:bold;">{{ primary.plan_title }}</div>
-            {% if primary.project_title and primary.project_title != primary.plan_title %}
-            <div style="margin-top:2px;">Projeto: {{ primary.project_title }}</div>
-            {% endif %}
-            <div style="margin-top:4px;">
-              {% if primary.project_code %}{{ primary.project_code }}{% endif %}
-              {% if primary.edital %} · Edital {{ primary.edital }}{% endif %}
-              {% if primary.funded_slots %} · {{ primary.funded_slots }} vaga(s) com bolsa{% endif %}
-            </div>
-          </td></tr>
-        </table>
-      </td></tr>
-      {% endif %}
-      <tr><td style="padding:6px 30px 26px 30px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#7a8a99;border-top:1px solid #eef1f4;">
-        Mensagem individual, enviada diretamente por {{ sender_name }}. Se preferir não receber novos contatos, basta responder informando.
-      </td></tr>
-    </table>
+<body style="margin:0;padding:0;">
+<div style="max-width:600px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a;">
+{{ body_html }}
+
+{% if card and card.stats %}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+       style="margin:26px 0 4px;border-collapse:collapse;">
+  <tr><td style="border:1px solid #d8dde3;border-radius:6px;padding:14px 16px;background:#fbfcfd;
+                 font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+                 font-size:12px;line-height:1.6;color:#4a5560;">
+    <div style="font-weight:700;color:#1a1a1a;letter-spacing:.02em;">PULSAR</div>
+    <div style="margin-top:1px;">sistema de prospecção de oportunidades de pesquisa, desenvolvido por mim</div>
+    <div style="margin-top:9px;color:#1a1a1a;">
+      <strong>{{ card.stats.n_opportunities|milhar }}</strong> planos ·
+      <strong>{{ card.stats.n_projects|milhar }}</strong> projetos ·
+      <strong>{{ card.stats.n_professors|milhar }}</strong> docentes ·
+      <strong>{{ card.stats.n_atoms|milhar }}</strong> registros extraídos do SIGAA e do Lattes
+    </div>
+    {% if card.stats.benchmark %}
+    <div style="margin-top:4px;">
+      ranqueamento avaliado em {{ card.stats.benchmark.n_tasks }} tarefas de recuperação,
+      MRR {{ card.stats.benchmark.fused_mrr|decimal }} — método e resultados no relatório em anexo
+    </div>
+    {% endif %}
+    {% if card.percentile and card.reading and card.reading.facets %}
+    <div style="margin-top:9px;padding-top:9px;border-top:1px solid #e6eaee;color:#1a1a1a;">
+      este plano: percentil <strong>{{ card.percentile|round|int }}</strong>{% for key, label in facet_labels %}{% if key in card.reading.facets %} · {{ label }} p{{ card.reading.facets[key]|round|int }}{% endif %}{% endfor %}
+    </div>
+    {% endif %}
+    {% if links %}
+    <div style="margin-top:9px;">
+      {% for l in links %}<a href="{{ l.url }}" style="color:#3060a8;text-decoration:none;">{{ l.label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}
+    </div>
+    {% endif %}
   </td></tr>
 </table>
+{% endif %}
+</div>
 </body>
 </html>

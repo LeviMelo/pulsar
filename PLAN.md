@@ -1090,6 +1090,49 @@ pleading rather than as a colleague asking a question. The ask is now two
 sentences: what the edital says, and whether it still holds. The test pins the
 absence of the earlier phrasing, not only the presence of the new.
 
+**D30 — Audience narrowed to plans that publish a funded slot.**
+32 professors rather than 62. The wide send was for presenting the operator; the
+narrow one is for finding a bolsa, and a plan with no funded slot cannot answer
+the question the message asks.
+
+**D31 — HTML is one element, not a wrapper.**
+The theme used to wrap the message in a rounded card on a grey field in a serif
+face, and the body was a stack of styled blocks, so a reply that quoted it pasted
+as a mess. The body is now plain `<p>` in the reader's default size with no page
+chrome; the single deliberate piece of HTML is a self-contained footer card,
+placed after the signature where it cannot interrupt. Its values come from the
+same `card_lines` the plaintext footer uses, so the two alternatives cannot
+drift. Markup fell from ~14 KB to ~3.8 KB, and `<table>` count to one, which is
+asserted.
+
+**D32 — The measurement moved out of the body.**
+The rank table and its caption were four paragraphs of method standing between a
+professor reading on deadline day and the question being asked. The battery lives
+in the attached report; three lines survive in the footer. `method_panel`,
+`method_caption` and `fit_panel` were deleted rather than left unused.
+
+**D33 — What is offered is selected by the recipient's own plan.**
+`contribution_by_skill` maps extracted skill ids to sentences, and
+`select_contributions` picks at most three against the skills PULSAR found in
+*that* plan, deduplicated (four SUS skills mean one sentence about SUS
+extraction, not four). `select_works` cites at most two prior outputs and only
+where tags overlap the plan — an unrelated manuscript is not evidence of anything
+the recipient cares about, so a plan with no overlap gets none. Across the 32
+drafts this produced 19 distinct contribution sets.
+
+**D34 — The gate is on the ranking claim, not on specificity.**
+Previously a weak fit got no plan-specific content at all, which made it a form
+letter. Naming a technique the recipient's own plan text asks for is a fact about
+their plan, not an assertion about how well it matches, so it is now available at
+any percentile; only "where you ranked" stays behind
+`STRONG_FIT_PERCENTILE`. 7 of the 32 state a rank; 24 name a technique.
+
+**D35 — The registration/conversation/indication distinction is stated once.**
+PULSAR registered interest automatically wherever a plan was compatible. That is
+triage, not commitment, and conflating it with an indication misrepresents the
+operator to a professor who can see the SIGAA record. Every draft carries the
+distinction in one sentence, and a test pins it.
+
 ---
 
 ## 23. Final note to the next agent

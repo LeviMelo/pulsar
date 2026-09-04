@@ -1,41 +1,53 @@
-"""A draft must never claim more affinity than the ranking actually found.
+"""A draft must never claim more affinity than the ranking found, and must not
+read as a form letter with a name substituted in.
 
-The operator applied to 187 opportunities across 65 professors, most of them
-outside his field. An email asserting shared research interest to a recipient at
-the 7th percentile is a claim two colleagues can disprove by comparing inboxes,
-so the assertion is gated on the measured fit rather than written unconditionally
-into the template.
+The operator applied across an edital, most of it outside his field. An email
+asserting shared research interest to a recipient at the 7th percentile is a
+claim two colleagues can disprove by comparing inboxes, so the ranking assertion
+is gated on the measured fit. What is *not* gated is naming a technique the
+recipient's own plan asks for: that is a fact about their plan, and it is the
+only thing that makes a low-ranked draft worth reading.
 """
 from __future__ import annotations
 
 import pytest
 
 from pulsar_research.outreach.panels import benchmark_summary
-from pulsar_research.outreach.render import (STRONG_FIT_PERCENTILE, build_context,
-                                             read_template, render_message)
+from pulsar_research.outreach.render import (MAX_CONTRIBUTIONS, MAX_WORKS,
+                                             STRONG_FIT_PERCENTILE, build_context,
+                                             read_template, render_message,
+                                             select_contributions, select_works)
 
 PROFILE = {
-    "about_lines": ["pesquisador no NEES/UFAL", "direção de pesquisa do IFMSA-UFAL"],
-    "work_lines": ["manuscrito sobre leptospirose, em preparação"],
-    "contribution_lines": ["construir e curar a base de dados",
-                           "conduzir a análise estatística"],
+    "identity_line": "estudante do 5º período de Medicina na FAMED/UFAL",
+    "contribution_by_skill": {
+        "time_series": "montar a análise de tendência temporal",
+        "datasus": "automatizar a extração das bases do SUS",
+        "sinan": "automatizar a extração das bases do SUS",   # same sentence, on purpose
+        "meta_analysis": "conduzir a metanálise",
+    },
+    "contribution_default": ["construir e curar a base de dados",
+                             "conduzir a análise estatística"],
+    "work_lines": [
+        {"text": "estudo de séries temporais sobre leptospirose", "tags": ["time_series", "sinan"]},
+        {"text": "manuscritos de farmacoepidemiologia no SNGPC", "tags": ["datasus"]},
+        {"text": "aplicação web de mapas conceituais", "tags": ["web_dev"]},
+    ],
     "annexes": ["Relatório PULSAR (PDF)"],
-    "links": [{"label": "Mapa conceitual", "url": "https://levimelo.github.io/mapdoc/"}],
+    "links": [{"label": "CMapDoc", "url": "https://levimelo.github.io/mapdoc/"}],
     "campaign_signature": "Levi de Melo Amorim",
 }
-# Enough of a benchmark for the method panel to draw something.
 PULSAR = {"n_opportunities": 187, "n_projects": 89, "n_professors": 65,
-          "n_atoms": 2242, "n_pages": 1243, "benchmark": benchmark_summary([
-    {"benchmark": b, "channel": c, "metric": "mrr", "value": v}
-    for b in ("title_to_body", "cross_project_area")
-    for c, v in (("lexical_word", 0.9), ("latent", 0.7), ("fused", 0.8))
-])}
+          "n_atoms": 15019, "n_pages": 1932, "benchmark": benchmark_summary([
+              {"benchmark": b, "channel": c, "metric": "mrr", "value": v}
+              for b in ("title_to_body", "cross_project_area")
+              for c, v in (("lexical_word", 0.9), ("latent", 0.7), ("fused", 0.8))])}
 SIGNATURE = "Levi de Melo Amorim"
 # The gated claim: only a strong fit may tell a recipient where they ranked.
-AFFINITY = "ficou no percentil"
+RANK_CLAIM = "O seu ficou em"
 
 
-def recipient(percentile: float, *, skills=("Séries temporais",), applied=True, funded=1):
+def recipient(percentile: float, *, skills=("time_series",), applied=True, funded=1):
     return {
         "siape": "1", "professor_name": "maria das gracas taveira",
         "email": "maria@example.invalid",
@@ -43,100 +55,151 @@ def recipient(percentile: float, *, skills=("Séries temporais",), applied=True,
             "id_opportunity": "9", "project_title": "Projeto X", "plan_title": "Plano Y",
             "edital": "Edital 01 Pibic 2026-2027", "funded_slots": funded,
             "opportunity_percentile": percentile, "already_applied": applied,
-            "skills": [{"label": s, "generic": False} for s in skills],
+            "skills": [{"skill_id": s, "label": s.replace("_", " "), "generic": False}
+                       for s in skills],
         }],
         "rationale": {
             "opportunity_percentile": percentile, "funded_slots": funded,
             "already_applied": applied,
-            "matched_skills": list(skills), "top_evidence": [],
-            "reading": {"facets": {"overall": percentile, "domain": percentile},
-                        "channels": {"neural": percentile}},
+            "matched_skills": [s.replace("_", " ") for s in skills], "top_evidence": [],
+            "reading": {"facets": {"domain": percentile, "methods": percentile}},
         },
         "portfolio_evidence": [],
     }
 
 
-def render(percentile: float, *, pulsar=None, **kw) -> str:
-    _, body, _ = render_message(read_template("default_subject.j2"),
-                                read_template("default_body.j2"),
-                                recipient(percentile, **kw), SIGNATURE, PROFILE,
-                                extra={"pulsar": pulsar} if pulsar else None)
-    return body
+def render(percentile: float, *, pulsar=PULSAR, **kw):
+    return render_message(read_template("default_subject.j2"),
+                          read_template("default_body.j2"),
+                          recipient(percentile, **kw), SIGNATURE, PROFILE,
+                          extra={"pulsar": pulsar} if pulsar else None)
 
 
-def test_a_strong_fit_may_state_the_alignment():
-    body = render(STRONG_FIT_PERCENTILE + 5)
-    assert AFFINITY in body
-    assert "séries temporais" in body.lower()
+def body(percentile: float, **kw) -> str:
+    return render(percentile, **kw)[1]
 
 
-def test_every_draft_discloses_that_it_was_generated():
-    """The operator chose disclosure over concealment; it must not be droppable."""
+def test_a_strong_fit_may_state_where_the_plan_ranked():
+    text = body(98.0)
+    assert RANK_CLAIM in text and "5º" in text, "percentile 98 of 187 is roughly 5th"
+
+
+def test_a_weak_fit_never_states_a_ranking():
+    assert RANK_CLAIM not in body(7.0)
+
+
+def test_a_weak_fit_may_still_name_what_the_plan_itself_asks_for():
+    """Otherwise a low-ranked draft is a form letter, which is worse than silent."""
+    text = body(7.0)
+    assert "O seu plano pede time series" in text
+    assert "montar a análise de tendência temporal" in text
+
+
+def test_the_threshold_is_the_only_thing_that_gates_the_ranking():
+    assert RANK_CLAIM not in body(STRONG_FIT_PERCENTILE - 0.1)
+    assert RANK_CLAIM in body(STRONG_FIT_PERCENTILE)
+
+
+def test_every_draft_says_who_is_writing_on_the_first_screen():
+    first = body(50.0).split("\n\n")[1]
+    assert "5º período de Medicina na FAMED/UFAL" in first
+    assert "Registrei interesse no plano" in first
+
+
+def test_every_draft_separates_registration_from_indication():
+    """The whole campaign rests on this distinction; it must never be dropped."""
     for percentile in (7.0, 98.0):
-        body = render(percentile)
-        assert "PULSAR" in body
-        assert "redigida e enviada por um sistema" in body
+        text = body(percentile)
+        assert "não é indicação nem compromisso" in text
+        assert "antes de indicar qualquer coisa no SIGAA" in text
 
 
-def test_a_weak_fit_never_states_an_alignment():
-    body = render(7.0)
-    assert AFFINITY not in body, "a p7 recipient must not be told the plan matches this student"
-    assert "Séries temporais" not in body
+def test_the_scholarship_question_is_asked_plainly_in_every_draft():
+    for percentile in (0.0, 50.0, 100.0):
+        text = body(percentile)
+        assert "ainda está disponível para indicação?" in text
+        assert "priorizando as vagas com bolsa" in text
 
 
-def test_the_threshold_is_the_only_thing_that_gates_the_claim():
-    assert AFFINITY not in render(STRONG_FIT_PERCENTILE - 0.1)
-    assert AFFINITY in render(STRONG_FIT_PERCENTILE)
+def test_the_offer_is_built_from_the_plan_not_from_a_fixed_list():
+    single = select_contributions({"skills": [{"skill_id": "meta_analysis", "generic": False}]},
+                                  PROFILE)
+    assert single[0] == "conduzir a metanálise"
+    # Several SUS skills mean one sentence about SUS extraction, not several.
+    deduped = select_contributions(
+        {"skills": [{"skill_id": s, "generic": False} for s in ("datasus", "sinan")]}, PROFILE)
+    assert deduped.count("automatizar a extração das bases do SUS") == 1
 
 
-def test_the_draft_acknowledges_an_application_the_professor_can_already_see():
-    assert "me inscrevi" in render(90.0, applied=True)
-    assert "tenho interesse" in render(90.0, applied=False)
+def test_a_plan_matching_nothing_still_gets_a_usable_offer():
+    assert select_contributions({"skills": []}, PROFILE) == PROFILE["contribution_default"]
+
+
+def test_the_offer_never_becomes_a_catalogue():
+    many = [{"skill_id": s, "generic": False}
+            for s in ("time_series", "datasus", "meta_analysis", "sinan")]
+    assert len(select_contributions({"skills": many}, PROFILE)) == MAX_CONTRIBUTIONS
+
+
+def test_prior_work_is_cited_only_when_it_bears_on_this_plan():
+    relevant = select_works({"skills": [{"skill_id": "time_series", "generic": False}]}, PROFILE)
+    assert relevant == ["estudo de séries temporais sobre leptospirose"]
+    assert select_works({"skills": [{"skill_id": "epi_design", "generic": False}]}, PROFILE) == [], \
+        "an unrelated output is not evidence of anything the recipient cares about"
+    both = select_works({"skills": [{"skill_id": s, "generic": False}
+                                    for s in ("sinan", "datasus")]}, PROFILE)
+    assert len(both) <= MAX_WORKS
+
+
+def test_the_message_stays_short_enough_to_read_on_a_deadline_day():
+    text = body(98.0)
+    assert len(text) < 2800, f"a cold email of {len(text)} chars will not be read"
+
+
+def test_the_html_alternative_is_plain_prose_plus_exactly_one_card():
+    """The body pasted into a reply must not arrive as a stack of styled boxes."""
+    markup = render(98.0)[2]
+    assert markup.count("<table") == 1, "the footer card is the only table"
+    assert "<pre" not in markup
+    assert markup.count("<p>") >= 6, "the message itself is plain paragraphs"
+    assert "background:#f4f6f8" not in markup, "no page chrome around the message"
+
+
+def test_the_footer_says_the_same_thing_in_both_alternatives():
+    _, text, markup = render(98.0)
+    for token in ("15.019", "187", "PULSAR"):
+        assert token in text and token in markup
+    assert "https://levimelo.github.io/mapdoc/" in text
+    assert 'href="https://levimelo.github.io/mapdoc/"' in markup
+
+
+def test_without_statistics_the_footer_is_omitted_and_the_message_still_stands():
+    text = body(98.0, pulsar=None)
+    assert "sistema de prospecção" not in text
+    assert "Registrei interesse no plano" in text
+    assert "ainda está disponível para indicação?" in text
 
 
 def test_context_never_invents_a_fit_when_the_ranking_produced_none():
     ctx = build_context({"professor_name": "x", "qualifying_opportunities": [], "rationale": {}},
                         SIGNATURE, PROFILE)
     assert ctx["fit_is_strong"] is False and ctx["opportunity_percentile"] == 0.0
-
-
-@pytest.mark.parametrize("percentile", [0.0, 50.0, 100.0])
-def test_the_ask_is_always_present(percentile):
-    assert "permanece disponível" in render(percentile)
-    assert "com ou sem bolsa" in render(percentile, funded=0)
-
-
-def test_a_funded_slot_is_reported_as_the_edital_says_it_not_as_fact():
-    """The edital's funding flag is what PULSAR read, not what the professor has.
-
-    Professors commonly allocate a bolsa before publication. A draft that treats
-    the flag as ground truth asks a question the recipient has to correct.
-    """
-    body = render(90.0, funded=1)
-    assert "O edital indica vaga com bolsa" in body
-    assert "nem sempre acompanha o que já foi combinado" in body
-    # Stated once, in the register of the rest of the message. An earlier draft
-    # explained at length that a refusal would not offend, which reads as
-    # pleading rather than as a colleague asking a question.
-    assert "não me constrange" not in body and "não insisto" not in body
+    assert ctx["card"]["percentile"] == 0.0
 
 
 def test_the_declared_qualifications_never_name_the_restricted_counterpart():
     """The NEES data-infrastructure work is disclosable; its counterpart is not.
 
-    This is a real confidentiality constraint on the operator, and the text is
-    sent verbatim to SIGAA and paraphrased into outreach, so it is pinned here
-    rather than left to whoever next edits the profile.
+    These emails will be read far more attentively than the SIGAA field, so
+    every outward surface is checked, not only the one sent to SIGAA.
     """
     from pulsar_research.config import AppConfig
 
     profile = AppConfig.load().load_profile()
-    # Every surface that is actually sent, not only the one sent to SIGAA:
-    # `about_lines` and `work_lines` go to 62 external recipients.
-    surfaces = [profile.get("qualifications_text", ""),
-                *profile.get("capability_lines", []),
-                *profile.get("about_lines", []),
-                *profile.get("work_lines", [])]
+    surfaces = [profile.get("qualifications_text", ""), profile.get("identity_line", ""),
+                *profile.get("capability_lines", []), *profile.get("about_lines", []),
+                *(w.get("text", "") for w in profile.get("work_lines", [])),
+                *(profile.get("contribution_by_skill") or {}).values()]
     # Naming the counterpart is not the only way to expose the project: NEES plus
     # "monitoring system" plus TabNet plus national scope reconstructs it for
     # anyone who would recognise it. The operator-facing text describes his
@@ -150,36 +213,8 @@ def test_the_declared_qualifications_never_name_the_restricted_counterpart():
     assert "DATASUS" in profile["qualifications_text"], "nor is the subject matter"
 
 
-def test_the_method_panel_is_shown_to_everyone_including_a_poor_match():
-    """It describes the engine, not the recipient, so nothing gates it."""
-    for percentile in (7.0, 98.0):
-        body = render(percentile, pulsar=PULSAR)
-        assert "representação" in body and "média" in body
-        assert "achar o plano pelo seu título" in body
-
-
-def test_the_fit_panel_obeys_the_same_gate_as_the_prose_claim():
-    """A chart asserting alignment is still an assertion of alignment."""
-    assert "percentil deste plano" not in render(7.0, pulsar=PULSAR)
-    assert "percentil deste plano" in render(98.0, pulsar=PULSAR)
-
-
-def test_without_statistics_no_panel_is_drawn_and_nothing_breaks():
-    body = render(98.0)
-    assert "achar o plano pelo seu título" not in body
-    assert "SOBRE MIM" in body, "the rest of the message must still render"
-
-
-def test_the_artefacts_offered_are_the_ones_the_profile_declares():
-    body = render(98.0)
-    assert "Relatório PULSAR (PDF)" in body
-    assert "manuscrito sobre leptospirose" in body
-    assert "https://levimelo.github.io/mapdoc/" in body
-
-
-def test_a_half_measured_corpus_refuses_to_render_rather_than_understating_itself():
-    """StrictUndefined is the guard: better a failed build than "0 projetos"."""
-    import jinja2
-
-    with pytest.raises(jinja2.UndefinedError):
-        render(98.0, pulsar={"n_opportunities": 187})
+@pytest.mark.parametrize("percentile", [0.0, 69.9, 70.0, 100.0])
+def test_no_draft_ever_loses_the_recipient_or_the_plan(percentile):
+    text = body(percentile)
+    assert "Prezado(a) Prof(a). Maria das Gracas Taveira," in text
+    assert "Plano Y" in text

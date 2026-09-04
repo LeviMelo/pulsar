@@ -1,89 +1,37 @@
-"""Monospaced measurement panels for outreach bodies.
+"""The compact measurement summary that rides in the footer of an outreach mail.
 
-An email cannot carry a matplotlib figure without an image the recipient's
-client may refuse to load, so the charts here are drawn in text. They render
-inside ``<pre>`` in the HTML alternative and as an indented block in the
-plaintext one, which is why every line is indented: that indentation is the
-signal :func:`..render.text_to_html` uses to decide what must stay monospaced.
+An earlier version drew the whole retrieval battery into the message body as a
+monospaced table. It was accurate and it was wrong for the medium: four
+paragraphs of method stood between a professor reading on deadline day and the
+question being asked, and the monospaced blocks made the message awkward to
+quote or copy. The battery now lives in the attached report, where a reader who
+wants it will find it, and only a three-line summary survives here.
 
-Two rules govern what may be drawn:
-
-*   **Never a bar chart of incommensurable quantities.** Counting work plans and
-    counting archived pages on the same axis is a chart that lies. Where the
-    quantities do not share a scale the panel prints a table instead.
-*   **Never a bar chart of a near-tie.** The six representations sit within
-    0.09 MRR of one another; drawn as bars they would look identical while
-    implying a precision 187 cases do not support. Their *rank per task* carries
-    the real finding — fusion rarely wins outright, but it is the only
-    representation without a bad case — so the panel ranks them and the caption
-    is generated from those ranks rather than asserted.
+`benchmark_summary` is still computed from the store rather than written down,
+so a rebuilt semantic space cannot leave a stale number inside an email.
 """
 
 from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
-# Full block plus the eighth-width partials, so a bar has sub-character
-# resolution and two nearby values stay visually distinct.
-_PARTIALS = "▏▎▍▌▋▊▉"
-_TRACK = "·"
-INDENT = "   "
-
-# The seven self-supervised retrieval tasks. Each label is a short description a
-# reader can check against intuition — "hide the title and see if it comes back"
-# — rather than the benchmark's internal key.
-TASK_LABELS: dict[str, str] = {
-    "title_to_body": "achar o plano pelo seu título",
-    "masked_title": "idem, com o título escondido",
-    "objectives_to_methodology": "objetivos → metodologia",
-    "sibling_plan": "plano irmão do mesmo projeto",
-    "sibling_deduplicated": "idem, sem texto em comum",
-    "cross_project_area": "mesma área, outro projeto",
-    "professor_holdout": "achar o docente pela obra dele",
-}
-TASK_ORDER = list(TASK_LABELS)
-
-# The table is transposed — representations down the side, tasks across the top —
-# for one reason: it lets each representation carry a name a non-specialist can
-# read, and it puts each representation's seven results on one line, where the
-# pattern (one row with no bad number) is visible without being explained.
-CHANNEL_LABELS: dict[str, str] = {
-    "lexical_word": "palavras (TF-IDF)",
-    "lexical_char": "trechos de palavra",
-    "bm25": "BM25F",
-    "bm25f": "BM25F",
-    "latent": "sentido, treinado no edital",
-    "neural": "neural, rodando local",
-    "fused": "combinação (palavras+sentido+neural)",
-}
+# The seven self-supervised retrieval tasks, in the order a reader should meet
+# them: literal recall first, generalisation last.
+TASK_ORDER = [
+    "title_to_body", "masked_title", "objectives_to_methodology",
+    "sibling_plan", "sibling_deduplicated", "cross_project_area",
+    "professor_holdout",
+]
 CHANNEL_ORDER = ["lexical_word", "lexical_char", "bm25", "bm25f", "latent", "neural", "fused"]
 
 FACET_LABELS: dict[str, str] = {
-    "overall": "no conjunto",
-    "domain": "tema do plano",
-    "methods": "métodos empregados",
-    "skills": "competências exigidas",
+    "domain": "tema",
+    "methods": "métodos",
+    "skills": "competências",
 }
 
 
-def bar(value: float, maximum: float, width: int) -> str:
-    """A horizontal bar of `width` cells, with an explicit track behind it.
-
-    The track matters: without it a reader cannot tell a short bar from a
-    truncated axis.
-    """
-    if maximum <= 0 or width <= 0:
-        return _TRACK * max(width, 0)
-    cells = max(0.0, min(1.0, value / maximum)) * width
-    full = int(cells)
-    out = "█" * min(full, width)
-    remainder = cells - full
-    if full < width and remainder >= 1 / 16:
-        out += _PARTIALS[min(len(_PARTIALS) - 1, int(remainder * 8))]
-    return out + _TRACK * (width - len(out))
-
-
-def _decimal(value: float, places: int = 2) -> str:
+def decimal(value: float, places: int = 2) -> str:
     """0.843 -> '0,84'. The email is in Portuguese; so is its decimal mark."""
     return f"{value:.{places}f}".replace(".", ",")
 
@@ -99,11 +47,7 @@ def _ranks(values: Mapping[str, float]) -> dict[str, int]:
 
 
 def benchmark_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """Reduce raw ``semantic_benchmarks`` MRR rows to what a panel needs.
-
-    Everything a caption might claim is derived here, so a rebuilt semantic
-    space cannot leave a stale superlative inside an email already sent.
-    """
+    """Reduce raw ``semantic_benchmarks`` MRR rows to what the footer needs."""
     by_task: dict[str, dict[str, float]] = {}
     for row in rows:
         if row.get("metric") != "mrr":
@@ -120,113 +64,42 @@ def benchmark_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     means = {c: sum(by_task[t][c] for t in tasks if c in by_task[t]) /
                 max(1, sum(1 for t in tasks if c in by_task[t]))
              for c in channels}
-    worst = {c: max(ranks[t].get(c, len(channels)) for t in tasks) for c in channels}
     fused_ranks = [ranks[t]["fused"] for t in tasks if "fused" in ranks[t]]
     return {
         "channels": channels,
         "tasks": tasks,
-        "mrr": by_task,
-        "ranks": ranks,
         "means": means,
-        "worst_ranks": worst,
         "n_tasks": len(tasks),
-        "n_channels": len(channels),
-        "fused_wins": sum(1 for r in fused_ranks if r == 1),
+        "fused_mrr": means.get("fused", 0.0),
         "fused_worst": max(fused_ranks) if fused_ranks else 0,
     }
 
 
-def method_panel(pulsar: Mapping[str, Any] | None) -> str:
-    """Every representation's rank on every task, one representation per row.
+def card_lines(card: Mapping[str, Any] | None) -> list[str]:
+    """The footer, as plain lines.
 
-    Returns "" when the statistics are absent, so a template can guard on it.
+    The same values the HTML card renders, so the two alternatives of the
+    message cannot drift apart: one function, two presentations.
     """
-    summary = (pulsar or {}).get("benchmark") or {}
-    channels, tasks = summary.get("channels") or [], summary.get("tasks") or []
-    if not channels or not tasks:
-        return ""
-
-    label_width = max(len(CHANNEL_LABELS.get(c, c)) for c in channels) + 1
-    numbers = [str(i) for i in range(1, len(tasks) + 1)]
-
-    def row(label: str, cells: Sequence[str], tail: str) -> str:
-        return (f"{INDENT}{label.ljust(label_width)}"
-                + "".join(cell.rjust(3) for cell in cells)
-                + tail.rjust(7))
-
-    rule = INDENT + "─" * (label_width + 3 * len(tasks) + 7)
-    lines = [row("representação", numbers, "média"), rule]
-    for channel in channels:
-        ranks = [summary["ranks"][t] for t in tasks]
-        lines.append(row(
-            CHANNEL_LABELS.get(channel, channel),
-            [f"{r[channel]}º" if channel in r else "—" for r in ranks],
-            # Two decimals, not three: the means span 0.09 across six
-            # representations, and a third digit would imply a resolution the
-            # sample cannot support.
-            _decimal(summary["means"].get(channel, 0.0)),
-        ))
-    lines.append(rule)
-    lines.append(INDENT)
-    # The column key, two tasks per line, so the table needs no prior reading.
-    pairs = [f"{i} {TASK_LABELS.get(t, t)}" for i, t in enumerate(tasks, 1)]
-    for start in range(0, len(pairs), 2):
-        lines.append(INDENT + "  ·  ".join(pairs[start:start + 2]))
-    return "\n".join(lines)
-
-
-def method_caption(pulsar: Mapping[str, Any] | None) -> str:
-    """One sentence about the table, derived from the table.
-
-    The tempting claim — that the combination is the best representation — is
-    not true on this corpus and is never made. What is true is that it is the
-    only one without a bad case, and the sentence is emitted only while the
-    numbers still say so.
-    """
-    summary = (pulsar or {}).get("benchmark") or {}
-    if not summary:
-        return ""
-    worst = summary["fused_worst"]
-    others = {c: r for c, r in (summary.get("worst_ranks") or {}).items() if c != "fused"}
-    sentence = ("Nenhuma delas vence sempre, e a combinação quase nunca é a melhor "
-                f"em uma prova isolada. A questão é a última linha: ela nunca cai "
-                f"abaixo da {worst}ª posição")
-    if others and all(rank > worst for rank in others.values()):
-        sentence += (", enquanto cada representação sozinha desaba para as últimas "
-                     "colocações em alguma prova. É por isso que o ranqueamento usa "
-                     "a combinação: não porque tenha a melhor média, mas porque não "
-                     "tem um caso ruim.")
-    else:
-        sentence += "."
-    return sentence
-
-
-def fit_panel(reading: Mapping[str, Any] | None, *, total: int = 0) -> str:
-    """Where one work plan sits, per facet and per representation.
-
-    Percentiles, unlike the MRR values above, genuinely span their range, so
-    here bars are the honest display.
-    """
-    facets = (reading or {}).get("facets") or {}
-    channels = (reading or {}).get("channels") or {}
-    shown = [f for f in FACET_LABELS if f in facets]
-    if not shown:
-        return ""
-
-    label_width = max(len(FACET_LABELS[f]) for f in shown) + 2
-    scope = f" entre os {total} planos avaliados" if total else ""
-    lines = [f"{INDENT}percentil deste plano{scope}", INDENT]
-    for facet in shown:
-        percentile = float(facets[facet])
-        lines.append(f"{INDENT}{FACET_LABELS[facet].ljust(label_width)}"
-                     f"{bar(percentile, 100.0, 22)} p{percentile:.0f}")
-    agreement = [(CHANNEL_LABELS.get(c, c), channels[c])
-                 for c in ("lexical_word", "latent", "neural") if c in channels]
-    if agreement:
-        # One per line rather than joined: the representation names are the same
-        # ones the table above uses, and joined they run past any sane wrap.
-        width = max(len(name) for name, _ in agreement) + 2
-        lines.append(INDENT)
-        lines.append(f"{INDENT}o mesmo plano, medido por cada representação sozinha")
-        lines.extend(f"{INDENT}{name.ljust(width)}p{value:.0f}" for name, value in agreement)
-    return "\n".join(lines)
+    stats = (card or {}).get("stats") or {}
+    if not stats:
+        return []
+    lines = ["PULSAR — sistema de prospecção de oportunidades de pesquisa, "
+             "desenvolvido por mim"]
+    lines.append(
+        f"{stats.get('n_opportunities', 0):,}".replace(",", ".") + " planos · "
+        + f"{stats.get('n_projects', 0):,}".replace(",", ".") + " projetos · "
+        + f"{stats.get('n_professors', 0):,}".replace(",", ".") + " docentes · "
+        + f"{stats.get('n_atoms', 0):,}".replace(",", ".") + " registros do SIGAA e do Lattes"
+    )
+    benchmark = stats.get("benchmark") or {}
+    if benchmark:
+        lines.append(
+            f"ranqueamento avaliado em {benchmark['n_tasks']} tarefas de recuperação "
+            f"(MRR {decimal(benchmark['fused_mrr'])}); método e resultados no relatório em anexo"
+        )
+    facets = ((card or {}).get("reading") or {}).get("facets") or {}
+    shown = [f"{FACET_LABELS[f]} p{float(facets[f]):.0f}" for f in FACET_LABELS if f in facets]
+    if shown and card.get("percentile"):
+        lines.append(f"este plano: percentil {float(card['percentile']):.0f} · " + " · ".join(shown))
+    return lines

@@ -16,7 +16,7 @@ from typing import Any, Mapping
 from jinja2 import Environment, StrictUndefined, Undefined
 
 from ..semantics.normalize import display_person_name
-from .panels import fit_panel, method_caption, method_panel
+from .panels import FACET_LABELS, card_lines, decimal
 
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 
@@ -38,6 +38,7 @@ def _environment(strict: bool = True) -> Environment:
         keep_trailing_newline=False,
     )
     env.filters["milhar"] = _milhar
+    env.filters["decimal"] = decimal
     return env
 
 
@@ -45,9 +46,74 @@ def read_template(name: str) -> str:
     return (TEMPLATE_DIR / name).read_text(encoding="utf-8")
 
 
-# Above this within-corpus percentile a draft may assert topical alignment.
+# Above this within-corpus percentile a draft may state *where the plan ranked*.
 # Chosen so the claim survives two recipients comparing their emails.
+#
+# It gates the ranking claim only. Naming a technique that the recipient's own
+# plan text asks for is a fact about their plan, not an assertion about how well
+# it matches, and stays available at any percentile — it is also the only thing
+# that makes a low-ranked draft worth reading.
 STRONG_FIT_PERCENTILE = 70.0
+
+# How many tailored items a message may carry. Past this the offer stops reading
+# as an offer and starts reading as a catalogue.
+MAX_CONTRIBUTIONS = 3
+MAX_WORKS = 2
+
+
+def _plan_skill_ids(primary: Mapping[str, Any]) -> list[str]:
+    """Skill ids extracted from this plan, most-mentioned first, generics last."""
+    return [str(s.get("skill_id")) for s in (primary.get("skills") or [])
+            if s.get("skill_id") and not s.get("generic")]
+
+
+def select_contributions(primary: Mapping[str, Any], profile: Mapping[str, Any]) -> list[str]:
+    """What to offer, chosen by what this plan actually asks for.
+
+    Several skills map deliberately to the same sentence — `datasus`, `sinan`,
+    `sih_sia` and `sim_sinasc` all mean "I would handle the SUS extraction" — so
+    the result is deduplicated while keeping first-seen order.
+    """
+    mapping = profile.get("contribution_by_skill") or {}
+    chosen: list[str] = []
+    for skill_id in _plan_skill_ids(primary):
+        line = mapping.get(skill_id)
+        if line and line not in chosen:
+            chosen.append(line)
+        if len(chosen) == MAX_CONTRIBUTIONS:
+            return chosen
+    for line in profile.get("contribution_default") or []:
+        if line not in chosen:
+            chosen.append(line)
+        if len(chosen) == MAX_CONTRIBUTIONS:
+            break
+    return chosen
+
+
+def select_works(primary: Mapping[str, Any], profile: Mapping[str, Any]) -> list[str]:
+    """At most two prior outputs, ranked by overlap with this plan's skills.
+
+    An output that shares nothing with the plan is not evidence of anything the
+    recipient cares about, so a plan with no overlap gets no works at all rather
+    than the first two on the list.
+    """
+    plan_skills = set(_plan_skill_ids(primary))
+    scored = []
+    for index, work in enumerate(profile.get("work_lines") or []):
+        if not isinstance(work, Mapping):
+            continue
+        overlap = len(plan_skills & set(work.get("tags") or []))
+        if overlap:
+            scored.append((-overlap, index, str(work.get("text", ""))))
+    return [text for _, _, text in sorted(scored)[:MAX_WORKS]]
+
+
+def _rank_from_percentile(percentile: float, pulsar: Mapping[str, Any] | None) -> int:
+    """Percentile back to a position, for a sentence a reader parses instantly."""
+    total = int((pulsar or {}).get("n_opportunities") or 0)
+    if total <= 0:
+        return 0
+    return max(1, min(total, int(round((100.0 - percentile) / 100.0 * total)) + 1))
 
 
 def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping[str, Any],
@@ -77,23 +143,25 @@ def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping
         "opportunity_percentile": percentile,
         "fit_is_strong": fit_is_strong,
         "already_applied": bool(rationale.get("already_applied")),
-        # Text-drawn analytics. The method panel describes the engine and is the
-        # same in every draft; the fit panel describes one work plan and is
-        # therefore gated on the same threshold as the prose claim above — a
-        # chart asserting alignment is still an assertion of alignment.
-        "panel_method": method_panel(pulsar),
-        "panel_method_caption": method_caption(pulsar),
-        "panel_fit": fit_panel(rationale.get("reading"),
-                               total=int((pulsar or {}).get("n_opportunities") or 0))
-                     if fit_is_strong else "",
-        # Deliberately two lists, never one. Credentials say the work can be
-        # trusted to him; contributions say what work he would actually take on.
-        # A single list under either heading answers the wrong question.
+        # The message body carries no chart. The retrieval battery lives in the
+        # attached report, where a professor who wants it can find it; in the
+        # body it was four paragraphs of method between the recipient and the
+        # question being asked. What survives is the compact summary in the
+        # footer card, which is the one piece of HTML in the message.
+        "card": {
+            "stats": pulsar,
+            "reading": (rationale.get("reading") or {}) if fit_is_strong else {},
+            "percentile": percentile if fit_is_strong else 0.0,
+        },
+        "identity_line": profile.get("identity_line") or "",
+        # A position is concrete where a percentile is jargon: "4º de 187" is
+        # read correctly by everyone, "percentil 98" by fewer.
+        "opportunity_rank": _rank_from_percentile(percentile, pulsar),
+        "facet_labels": list(FACET_LABELS.items()),
+        # Chosen against this plan's own extracted skills, not listed wholesale.
+        "contributions": select_contributions(primary, profile),
+        "works": select_works(primary, profile),
         "about_lines": list(profile.get("about_lines") or []),
-        "work_lines": list(profile.get("work_lines") or []),
-        "work_intro": profile.get("work_intro") or "",
-        "contribution_lines": list(profile.get("contribution_lines") or []),
-        "capability_lines": list(profile.get("capability_lines") or []),
         "annexes": list(profile.get("annexes") or []),
         "links": list(profile.get("links") or []),
         "signature": signature,
@@ -181,8 +249,20 @@ def render_message(
     theme: str = "default_email.html",
     extra: Mapping[str, Any] | None = None,
 ) -> tuple[str, str, str]:
-    """Returns ``(subject, plaintext, html)`` for one recipient."""
+    """Returns ``(subject, plaintext, html)`` for one recipient.
+
+    The footer exists twice, from one set of values: as a styled card in the
+    HTML alternative and as plain lines in the text one. It is appended after
+    the HTML is rendered so the card is not also spelled out inside it.
+    """
     context = build_context(recipient, signature, profile, extra=extra)
     subject, body = render_text(subject_template, body_template, context)
     body_html = render_html(body, {**context, "subject": subject}, theme=theme)
+
+    footer = card_lines(context.get("card"))
+    for link in context.get("links") or []:
+        footer.append(f"{link['label']}: {link['url']}")
+    if footer:
+        rule = "—" * 30
+        body = body.rstrip() + "\n\n" + rule + "\n" + "\n".join(footer) + "\n"
     return subject, body, body_html

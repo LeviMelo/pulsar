@@ -1,85 +1,28 @@
-Olá, {{ professor_name }},
+Prezado(a) Prof(a). {{ professor_name }},
 
-Meu nome é Levi de Melo Amorim, sou acadêmico de Medicina da FAMED/UFAL e {% if already_applied %}me inscrevi{% else %}tenho interesse{% endif %} no plano de trabalho “{{ primary.plan_title or primary.project_title }}”{% if primary.project_title and primary.plan_title and primary.project_title != primary.plan_title %}, do projeto “{{ primary.project_title }}”{% endif %}{% if primary.edital %} ({{ primary.edital }}){% endif %}.
+Sou Levi de Melo Amorim, {{ identity_line }}. Registrei interesse no plano “{{ primary.plan_title or primary.project_title }}”{% if primary.project_title and primary.plan_title and primary.project_title != primary.plan_title %}, do projeto “{{ primary.project_title }}”{% endif %}{% if primary.edital %} ({{ primary.edital }}){% endif %}.
 
-Sendo direto quanto à natureza desta mensagem: ela foi redigida e enviada por um sistema que eu mesmo desenvolvi, o PULSAR. Digo isso por duas razões. A primeira é honestidade — candidatei-me a vários planos deste edital, e seria falso sugerir que cada mensagem foi escrita individualmente à mão. A segunda é que o próprio sistema é a demonstração mais concreta que eu tenho do que sei fazer.
-{% if pulsar %}
+Cheguei até ele pelo PULSAR, um sistema que construí para organizar a minha própria candidatura: ele indexou os {{ pulsar.n_opportunities|milhar if pulsar else '' }} planos deste edital junto com a produção pública dos orientadores e os ordenou por afinidade com o que eu sei fazer.{% if fit_is_strong %} O seu ficou em {{ opportunity_rank }}º{% if matched_skills %}, sobretudo por {{ matched_skills[:2]|join(' e ')|lower }}{% endif %}.{% elif matched_skills %} O seu plano pede {{ matched_skills[:2]|join(' e ')|lower }}, que é trabalho que eu já faço.{% endif %}
 
-O que ele fez foi ler o edital inteiro e a produção pública de quem oferece os planos: {{ pulsar.n_opportunities|milhar }} planos de trabalho, {{ pulsar.n_projects|milhar }} projetos e {{ pulsar.n_professors|milhar }} docentes, a partir de {{ pulsar.n_pages|milhar }} páginas do SIGAA e do Lattes, decompostas em {{ pulsar.n_atoms|milhar }} registros individuais — cada projeto, artigo, orientação e linha de pesquisa tratado como um item separado. Cada texto é então representado de três maneiras independentes: pelas palavras que usa, por um modelo de significado treinado no próprio edital e por um modelo neural que roda localmente, na minha máquina. As três são combinadas, e os planos são ordenados por afinidade com o meu perfil.
-{% endif %}
-{% if panel_method %}
 
-O ranqueamento em si não me interessa tanto quanto saber se ele acerta. Para medir isso, submeti o sistema a sete provas em que a resposta certa já é conhecida — por exemplo, esconder o título de um plano e verificar se ele é reencontrado a partir do texto, ou tentar reencontrar um docente apenas a partir da obra dele. Cada linha da tabela é uma forma de representar o texto; cada coluna, uma prova; o número é a colocação obtida.
+O registro de interesse foi automático, em todos os planos suficientemente compatíveis, e não é indicação nem compromisso: estou falando individualmente com cada orientador antes de indicar qualquer coisa no SIGAA, para não travar propostas que ainda estão em discussão dos dois lados.
+{% if contributions %}
 
-{{ panel_method }}
-{% if panel_method_caption %}
+No seu plano especificamente, eu poderia assumir:
 
-{{ panel_method_caption }}
-{% endif %}
-{% endif %}
-{% if fit_is_strong %}
-
-No seu caso, este plano ficou no percentil {{ opportunity_percentile|round|int }} entre os {{ pulsar.n_opportunities|milhar if pulsar else 'demais' }} avaliados{% if matched_skills %}, sobretudo pela proximidade com {{ matched_skills[:3]|join(', ')|lower }}{% endif %} — é a razão de eu escrever a respeito dele com mais atenção.
-{% endif %}
-{% if panel_fit %}
-
-{{ panel_fit }}
-{% endif %}
-{% if about_lines %}
-
-SOBRE MIM
-
-{% for line in about_lines %}
+{% for line in contributions %}
 - {{ line }}
 {% endfor %}
 {% endif %}
-{% if work_lines %}
+{% if works %}
 
-O QUE PRODUZI RECENTEMENTE
-{% if work_intro %}
-
-{{ work_intro }}
+{% if works|length > 1 %}Dois trabalhos recentes que dão a medida disso, ambos em anexo:{% else %}Um trabalho recente que dá a medida disso, em anexo:{% endif %} {% for w in works %}{{ w }}{% if not loop.last %}; e {% endif %}{% endfor %}.
 {% endif %}
 
-{% for line in work_lines %}
-- {{ line }}
-{% endfor %}
+A pergunta prática: a bolsa registrada no edital ainda está disponível para indicação? Estou priorizando as vagas com bolsa — um vínculo voluntário interferiria em outras propostas que discuto no momento —, então a resposta muda o que eu faço a seguir.
+
+{% if annexes %}
+Anexei o relatório técnico do PULSAR e os trabalhos citados, caso queira olhar.
 {% endif %}
-{% if contribution_lines %}
-
-O QUE EU PODERIA ASSUMIR NESTE PROJETO
-{% if matched_skills %}
-
-Neste plano especificamente, {{ matched_skills[:4]|join(', ')|lower }} {% if matched_skills|length > 1 %}são competências que já uso{% else %}é uma competência que já uso{% endif %} em trabalho corrente. De forma mais ampla, poderia:
-{% else %}
-
-Ainda que o meu percurso não seja o da sua linha de pesquisa, há trabalho de base que eu poderia assumir integralmente. Poderia:
-{% endif %}
-
-{% for line in contribution_lines %}
-- {{ line }}
-{% endfor %}
-{% endif %}
-{% if annexes or links %}
-
-EM ANEXO
-
-{% for a in annexes %}
-- {{ a }}
-{% endfor %}
-{% for l in links %}
-- {{ l.label }}: {{ l.url }}
-{% endfor %}
-{% endif %}
-
-{% if primary.funded_slots %}
-O edital indica vaga com bolsa neste plano. Como essa informação nem sempre acompanha o que já foi combinado internamente, pergunto se ela permanece disponível.
-{% else %}
-O edital não indica bolsa neste plano. Ainda assim, pergunto se há vaga disponível, com ou sem bolsa.
-{% endif %}
-
-Em caso afirmativo, coloco-me à disposição para uma conversa breve, e posso enviar o currículo Lattes ou qualquer material complementar.
-
-Agradeço a atenção.
 
 {% if signature %}{{ signature }}{% endif %}

@@ -73,69 +73,87 @@ semantic_profile: >-
 # your own words rather than generated, because this is the part of a cold email
 # a professor actually reads. Keep each line short and specific: a capability
 # someone could ask you to demonstrate next week.
-# WHO I AM — milestones and standing roles, drawn from `personal/academic_ledger.md`
-# (gitignored). Establishes that the work can be trusted to me. Never presented
-# as "what I would do on your project": that is `contribution_lines`.
+# WHO I AM — drawn from `personal/academic_ledger.md` (gitignored).
 #
-# Two canonical corrections from the ledger are load-bearing here and must not
-# drift back: the OBMEP result is an honourable mention, NOT a bronze medal; and
-# the PIC/HU result is an approved-but-unclassified proposal, NOT a scholarship.
+# Two canonical corrections from the ledger are load-bearing and must not drift
+# back: the OBMEP result is an honourable mention, NOT a bronze medal; and the
+# PIC/HU result is an approved-but-unclassified proposal, NOT a scholarship.
 #
 # Coursework metrics are deliberately absent. IRA and entrance-exam score measure
-# how a student was graded, not what a researcher can do, and quoting them in a
-# message whose whole argument is demonstrated capability weakens it. Ordered by
-# what a reader should weigh first: standing research roles, then the technical
-# base, then formation.
-about_lines:
-  - "pesquisador bolsista no Núcleo de Excelência em Tecnologias Sociais (NEES/UFAL), como especialista de domínio em sistemas de informação em saúde e no tratamento de bases públicas do SUS"
-  - "projeto multicêntrico de reumatologia submetido ao PIC/HU Brasil sob orientação do Prof. Thiago Sotero Fragoso, com UFAL, UFMG, UFRGS e UNICAMP — derivação e validação de uma versão do SLE-DAS sem marcadores sorológicos. Respondo pela arquitetura do protocolo, pela harmonização dos dados entre os centros e pelo desenho estatístico da validação externa"
-  - "trabalho corrente em Python e R sobre bases administrativas de saúde — DATASUS, SINAN, SIM, SINASC, SIH/SIA, CNES, SNGPC/Anvisa, IBGE/SIDRA —, com pipelines reprodutíveis, congelamento de fontes e proveniência por SHA-256"
-  - "direção científica do IFMSA-UFAL, onde conduzo a capacitação metodológica da equipe em revisão sistemática, metanálise e desenho de estudos; direção de pesquisa do projeto de extensão HEMOMAIS (UNIMA)"
-  - "cofundador e diretor de iniciação científica da Liga Acadêmica de Cirurgia Cardiovascular da UFAL; integrante das ligas de Reumatologia, Neurologia e Neurocirurgia, Anestesiologia e Dor, Neurointensivismo e Clínica Médica"
-  - "monitor de Bioquímica I (SOI 1) na graduação em Medicina do UNIMA/Afya, onde cursei Medicina antes da transferência para a UFAL"
-  - "formação técnica em Eletroeletrônica pelo IFAL — Campus Arapiraca, anterior à Medicina; menção honrosa na OBMEP e na Olimpíada Alagoana de Matemática"
-
-# WHAT I HAVE PRODUCED — artefacts, with their real status. A manuscript in
-# preparation is described as such; nothing here is upgraded into a publication.
+# how a student was graded, not what a researcher can do.
 #
-# `work_intro` states the window. It is the productivity claim, so it is dated
-# against the artefacts themselves, not rounded down to a more impressive number:
-# the manuscripts carry dates from mid-August, PULSAR and CMapDoc are from this
-# week. Every date is checkable inside the attached PDFs.
-work_intro: >-
-  Todo o material abaixo é recente e datado nos próprios anexos: os manuscritos e
-  o programa científico foram escritos nas últimas três semanas, e o PULSAR, o
-  relatório anexo e a aplicação de mapa conceitual foram construídos nesta semana.
+# `identity_line` is the only credential the message states unprompted. Everything
+# else is either selected because it bears on the recipient's own plan, or lives
+# in the annexes. A catalogue of memberships buries the reason for writing.
+identity_line: >-
+  estudante do 5º período de Medicina na FAMED/UFAL e pesquisador bolsista no
+  NEES/UFAL
+
+# Reserve, not a script. Nothing here is emitted unless it is selected against
+# the recipient's own plan; the SIGAA qualifications field already carries the
+# full background and the email must not reproduce it.
+about_lines:
+  - "pesquisador bolsista no NEES/UFAL, em sistemas de informação em saúde e tratamento de bases públicas do SUS"
+  - "projeto multicêntrico de reumatologia no PIC/HU Brasil sob orientação do Prof. Thiago Sotero Fragoso, com UFAL, UFMG, UFRGS e UNICAMP"
+  - "direção científica do IFMSA-UFAL e do projeto de extensão HEMOMAIS (UNIMA)"
+  - "cofundador e diretor de iniciação científica da Liga Acadêmica de Cirurgia Cardiovascular da UFAL"
+  - "monitor de Bioquímica I na graduação em Medicina do UNIMA/Afya"
+  - "formação técnica em Eletroeletrônica pelo IFAL — Campus Arapiraca; menção honrosa na OBMEP e na Olimpíada Alagoana de Matemática"
+
+# WHAT I HAVE PRODUCED. At most two reach any one message, chosen by overlap with
+# the recipient's plan: an output only earns its line when it substantiates the
+# contribution being offered. `tags` are skill ids from the extracted taxonomy.
 work_lines:
-  - "“Amplitude de detecção e letalidade notificada da leptospirose: estudo ecológico de séries temporais, Brasil, 2007–2025” — manuscrito em preparação. Unidade de análise região de saúde/ano, modelagem binomial hierárquica com estrutura espacial e temporal, e triangulação entre notificação, internação e mortalidade. O argumento é de medida: parte da variação na letalidade notificada reflete qual porção do espectro clínico a vigilância captura, e não apenas a qualidade assistencial"
-  - "dois manuscritos de farmacoepidemiologia sobre a dispensação de agonistas do receptor de GLP-1 no SNGPC/Anvisa — um nacional, por UF e região, e outro com resolução municipal sobre as 5.571 unidades, com integração multibase e modelagem espacial. Ambos com aquisição reprodutível, congelamento das fontes e saídas versionadas"
-  - "programa científico em saúde cardiovascular da mulher e cardio-obstetrícia, estruturado como portfólio de pesquisa sobre o DATASUS: priorização por valor científico e viabilidade, mapeamento explícito de variáveis e fontes, critérios de descontinuação e destino definido para cada linha"
-  - "PegaSUS — motor próprio de descoberta e análise epidemiológica sobre o ecossistema DATASUS/IBGE, com um compêndio que mapeia sistemas, conjuntos, variáveis e a validade temporal de cada campo ao longo das mudanças históricas de esquema"
-  - "PULSAR — o sistema que produziu esta mensagem: aquisição, normalização, resolução de entidades, ranqueamento e avaliação, descrito no relatório em anexo"
-  - "CMapDoc — aplicação web de mapas conceituais interativos, em https://levimelo.github.io/mapdoc/. Concebi e implementei sozinho, do desenho da interação e do front-end até a publicação"
+  - text: "um estudo ecológico de séries temporais sobre a letalidade notificada da leptospirose no Brasil, 2007–2025, por região de saúde/ano, com modelagem binomial hierárquica e estrutura espacial"
+    tags: [datasus, sinan, epi_design, time_series, spatial_stats, biostatistics, regression, geoprocessing]
+  - text: "dois manuscritos de farmacoepidemiologia sobre a dispensação de agonistas de GLP-1 no SNGPC/Anvisa, um nacional e outro com resolução municipal sobre as 5.571 unidades, com integração multibase e aquisição reprodutível"
+    tags: [datasus, epi_design, data_management, python, spatial_stats, sql, ibge]
+  - text: "o PegaSUS, um motor de descoberta e análise epidemiológica sobre o ecossistema DATASUS/IBGE, que mapeia sistemas, variáveis e a validade temporal de cada campo ao longo das mudanças de esquema"
+    tags: [datasus, sim_sinasc, sih_sia, ibge, data_management, sql]
+  - text: "um programa de pesquisa em saúde cardiovascular da mulher e cardio-obstetrícia, estruturado como portfólio: priorização por viabilidade, mapeamento de fontes e destino definido para cada linha"
+    tags: [systematic_review, meta_analysis, literature_db, epi_design]
+  - text: "o CMapDoc, uma aplicação web de mapas conceituais interativos que concebi e implementei sozinho, do front-end à publicação (https://levimelo.github.io/mapdoc/)"
+    tags: [web_dev, machine_learning]
 
-# WHAT I WOULD DO — concrete tasks I can take off an orientador's hands on
-# essentially any quantitative or clinical project. Written as verbs, not nouns.
-contribution_lines:
-  - "construir e curar a base de dados do projeto, incluindo integração de fontes e controle de qualidade"
-  - "conduzir a análise estatística — desenho, modelagem de regressão, séries temporais e análise espacial — em Python ou R, de forma reprodutível"
-  - "estruturar a revisão de literatura e redigir o protocolo, com a estratégia de busca documentada"
-  - "automatizar a extração e o processamento de bases públicas quando o projeto as utilizar (DATASUS, SINAN, SIH/SIA, SIM/SINASC, SIDRA, IBGE)"
-  - "preparar figuras, tabelas e o texto para submissão, e manter a documentação do estudo"
+# WHAT I WOULD DO. Selected against the skills extracted from the recipient's own
+# plan, so the offer is about their project rather than about my CV. At most
+# three; `contribution_default` covers a plan whose extracted skills match none.
+contribution_by_skill:
+  biostatistics: "conduzir a análise estatística, do desenho ao ajuste dos modelos e à checagem de pressupostos"
+  regression: "conduzir a análise estatística, do desenho ao ajuste dos modelos e à checagem de pressupostos"
+  time_series: "montar a análise de tendência temporal, incluindo correção de autocorrelação serial"
+  spatial_stats: "montar a análise espacial — autocorrelação, varredura de clusters e os mapas do artigo"
+  geoprocessing: "montar a análise espacial — autocorrelação, varredura de clusters e os mapas do artigo"
+  datasus: "automatizar a extração e o tratamento das bases do SUS, com congelamento das fontes e proveniência por SHA-256"
+  sinan: "automatizar a extração e o tratamento das bases do SUS, com congelamento das fontes e proveniência por SHA-256"
+  sih_sia: "automatizar a extração e o tratamento das bases do SUS, com congelamento das fontes e proveniência por SHA-256"
+  sim_sinasc: "automatizar a extração e o tratamento das bases do SUS, com congelamento das fontes e proveniência por SHA-256"
+  ibge: "levantar e normalizar os denominadores populacionais e a malha geográfica do estudo"
+  systematic_review: "estruturar a revisão sistemática: estratégia de busca documentada, triagem em duplicata e extração"
+  meta_analysis: "conduzir a metanálise, incluindo heterogeneidade, análise de subgrupos e viés de publicação"
+  literature_db: "estruturar e documentar a estratégia de busca na literatura"
+  epi_design: "operacionalizar o desenho do estudo: desfechos, critérios de elegibilidade e plano de análise por escrito"
+  machine_learning: "implementar e validar os modelos, com avaliação fora da amostra e não apenas métricas de treino"
+  python: "construir e curar a base do projeto, da integração das fontes ao controle de qualidade, em Python ou R"
+  r_lang: "construir e curar a base do projeto, da integração das fontes ao controle de qualidade, em Python ou R"
+  sql: "modelar e consultar a base do estudo, mantendo o pipeline reprodutível"
+  data_management: "construir e curar a base do projeto, da integração das fontes ao controle de qualidade"
+  web_dev: "desenvolver a interface ou o painel de exploração dos resultados"
+contribution_default:
+  - "construir e curar a base de dados do projeto, da integração das fontes ao controle de qualidade"
+  - "conduzir a análise estatística de forma reprodutível, em Python ou R"
+  - "preparar figuras, tabelas e o texto para submissão"
 
-# Listed in the outreach body. Must correspond to what `campaign create --attach`
-# actually attaches; the wording here is what the professor reads. Manuscripts
-# are labelled as drafts, because that is what they are.
+# Named in the closing line and in the footer card; must match what
+# `campaign create --attach` actually attaches.
 annexes:
-  - "Relatório técnico do PULSAR — construção do corpus, estrutura temática e avaliação de recuperação semântica (PDF)"
+  - "Relatório técnico do PULSAR — construção do corpus, estrutura temática e avaliação de recuperação (PDF)"
   - "Leptospirose no Brasil, 2007–2025 — manuscrito em preparação (PDF)"
-  - "Dispensação de agonistas de GLP-1 no SNGPC, recorte nacional — manuscrito em preparação (PDF)"
-  - "Dispensação de agonistas de GLP-1 no SNGPC, recorte municipal — manuscrito em preparação (PDF)"
+  - "Agonistas de GLP-1 no SNGPC, recorte nacional — manuscrito em preparação (PDF)"
+  - "Agonistas de GLP-1 no SNGPC, recorte municipal — manuscrito em preparação (PDF)"
 
-# Live links, listed after the annexes. A concept-map application is interactive;
-# a static print of it would understate what it does.
 links:
-  - label: "Mapa conceitual interativo, aplicação web de minha autoria"
+  - label: "CMapDoc"
     url: "https://levimelo.github.io/mapdoc/"
 
 # Sent verbatim to SIGAA when an application is explicitly confirmed.
@@ -148,4 +166,4 @@ qualifications_text: |-
 
 campaign_signature: |-
   Levi de Melo Amorim
-  Medicina – FAMED/UFAL
+  5º período · Medicina — FAMED/UFAL
