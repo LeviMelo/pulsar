@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+*.duckdb
+*.wal
+data/raw/
+data/cache/
+data/public_sigaa/
+data/exports/
+projects_ledger.json
+projects_ledger.csv

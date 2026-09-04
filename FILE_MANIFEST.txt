@@ -1,0 +1,14 @@
+PULSAR v0.1.0
+Generated: 2026-09-03
+
+Core:
+- Typer/Rich CLI
+- DuckDB canonical store + legacy import/export compatibility
+- Preserved Playwright SIGAA authenticated workflow, split into sync/apply operations
+- Exhaustive public professor scraper + embedded Lattes extraction
+- Sparse semantic intelligence: TF-IDF word/char, LSA, BM25, NMF, K-means
+- Professor/project/funding/collaboration metrics
+- Streamlit dashboard
+- Campaign audience engine with exact qualifying-evidence snapshots
+- Jinja2 personalized per-recipient drafts + manual customization
+- SMTP delivery ledger with deduplication and explicit confirmation

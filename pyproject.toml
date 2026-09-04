@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pulsar"
+version = "0.1.0"
+description = "Local UFAL/SIGAA research opportunity intelligence and campaign system"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "beautifulsoup4>=4.12",
+  "charset-normalizer>=3.3",
+  "duckdb>=1.1",
+  "ftfy>=6.2",
+  "jinja2>=3.1",
+  "json5>=0.9",
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "playwright>=1.48",
+  "pyyaml>=6.0",
+  "requests>=2.32",
+  "rich>=13.8",
+  "scikit-learn>=1.5",
+  "streamlit>=1.39",
+  "typer>=0.12",
+]
+
+[project.scripts]
+pulsar = "pulsar_research.cli:app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pulsar_research = ["templates/*.j2"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
