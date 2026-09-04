@@ -1,0 +1,6 @@
+column_name,column_type,null,key,default,extra
+id_opportunity,VARCHAR,NO,PRI,,
+status,VARCHAR,YES,,,
+raw_status,VARCHAR,YES,,,
+applied_at,VARCHAR,YES,,,
+synced_at,VARCHAR,YES,,,

@@ -4,7 +4,7 @@ from collections import defaultdict
 from typing import Any
 
 from ..db import Database
-from ..analysis.v2 import score_ad_hoc_opportunities
+from ..analysis.text import quick_query_scores
 
 
 def select_audience(
@@ -30,24 +30,6 @@ def select_audience(
     keywords = [k.strip() for k in (keywords or []) if k.strip()]
     clusters = list(clusters or [])
     topic_ids = list(topic_ids or [])
-    # Ad-hoc campaign semantics are always scored against the FULL opportunity
-    # corpus. Structured filters must not redefine IDF/LSA and thereby change a
-    # candidate's score merely because another candidate was excluded.
-    query_score_map: dict[str, dict[str, float]] = {}
-    if semantic_query:
-        with db.connect(read_only=True) as con:
-            cols = [d[0] for d in con.execute("SELECT * FROM opportunities LIMIT 0").description]
-            all_rows = [dict(zip(cols, r)) for r in con.execute("SELECT * FROM opportunities ORDER BY id_opportunity").fetchall()]
-        if all_rows:
-            qr = score_ad_hoc_opportunities(all_rows, semantic_query)
-            for i, oid in enumerate(qr.ids):
-                query_score_map[str(oid)] = {
-                    "combined": float(qr.combined[i]),
-                    "domain": float(qr.domain.fit[i]),
-                    "methods": float(qr.methods.fit[i]),
-                    "skills": float(qr.skills.fit[i]),
-                }
-
     clauses = ["COALESCE(o.professor_siape,'')<>''"]
     params: list[Any] = []
     if funded_only:
@@ -109,23 +91,17 @@ def select_audience(
         rows = con.execute(sql, params).fetchdf().to_dict("records")
 
     if semantic_query and rows:
+        query_docs = [" ".join([str(r.get("project_title") or ""), str(r.get("plan_title") or ""), str(r.get("area") or ""), str(r.get("methodology") or ""), str(r.get("objectives") or "")]) for r in rows]
+        qscores = quick_query_scores(query_docs, semantic_query)
         enriched = []
-        for r in rows:
-            qrec = query_score_map.get(str(r.get("id_opportunity") or ""), {})
-            score = float(qrec.get("combined", 0.0))
-            r["campaign_query_score"] = score
-            r["campaign_query_domain"] = float(qrec.get("domain", 0.0))
-            r["campaign_query_methods"] = float(qrec.get("methods", 0.0))
-            r["campaign_query_skills"] = float(qrec.get("skills", 0.0))
-            if min_query_score is None or score >= float(min_query_score):
+        for r, score in zip(rows, qscores):
+            r["campaign_query_score"] = float(score)
+            if min_query_score is None or float(score) >= float(min_query_score):
                 enriched.append(r)
         rows = enriched
     else:
         for r in rows:
             r["campaign_query_score"] = 0.0
-            r["campaign_query_domain"] = 0.0
-            r["campaign_query_methods"] = 0.0
-            r["campaign_query_skills"] = 0.0
 
     grouped: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -154,9 +130,6 @@ def select_audience(
             "objectives": row.get("objectives") or "",
             "opportunity_fit": float(row.get("opportunity_fit") or 0),
             "campaign_query_score": float(row.get("campaign_query_score") or 0),
-            "campaign_query_domain": float(row.get("campaign_query_domain") or 0),
-            "campaign_query_methods": float(row.get("campaign_query_methods") or 0),
-            "campaign_query_skills": float(row.get("campaign_query_skills") or 0),
         })
     out = list(grouped.values())
     for rec in out:

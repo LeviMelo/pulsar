@@ -11,9 +11,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from .analysis.engine import benchmark_analysis, rebuild_analysis
+from .analysis.engine import rebuild_analysis
 from .analysis.text import quick_query_scores
-from .analysis.v2 import score_ad_hoc_opportunities
 from .config import AppConfig, discover_root
 from .db import Database
 from .ingest.legacy import export_professors_csv_for_scraper, import_ledger, import_professors_csv, resolve_opportunity_professors
@@ -102,41 +101,21 @@ def analysis_rebuild():
 
 @analysis_app.command("search")
 def analysis_search(query:str, entity_type:str=typer.Option("opportunity","--type"), limit:int=typer.Option(20,"--limit")):
-    """Ad-hoc deterministic sparse search; query never participates in corpus fitting."""
+    """Ad-hoc sparse semantic search over the current corpus; no persisted embeddings."""
     db=Database(cfg().paths.database)
-    if entity_type=="opportunity":
-        with db.connect(read_only=True) as con:
-            cols=[d[0] for d in con.execute("SELECT * FROM opportunities LIMIT 0").description]
-            rows=[dict(zip(cols,r)) for r in con.execute("SELECT * FROM opportunities ORDER BY id_opportunity").fetchall()]
-        if not rows:
-            console.print("No opportunities."); return
-        result=score_ad_hoc_opportunities(rows,query)
-        import pandas as pd
-        out=pd.DataFrame({
-            "query_score":result.combined,
-            "domain":result.domain.fit,
-            "methods":result.methods.fit,
-            "skills":result.skills.fit,
-            "entity_id":result.ids,
-            "project_title":[r.get("project_title") for r in rows],
-            "plan_title":[r.get("plan_title") for r in rows],
-            "professor_name":[r.get("professor_name") for r in rows],
-        }).sort_values("query_score",ascending=False).head(limit)
-        console.print(out.to_string(index=False)); return
     df=db.query_df("SELECT entity_id,document_text FROM analysis_documents WHERE entity_type=?",[entity_type])
     if df.empty:
         console.print("No analysis documents. Run `pulsar analyze rebuild` first."); return
     scores=quick_query_scores(df["document_text"].tolist(),query)
     df=df.assign(query_score=scores).sort_values("query_score",ascending=False).head(limit)
-    meta=db.query_df("SELECT siape,canonical_name,department FROM professors")
-    df=df.merge(meta,left_on="entity_id",right_on="siape",how="left")
-    console.print(df[["query_score","entity_id","canonical_name","department"]].to_string(index=False))
-
-
-@analysis_app.command("benchmark")
-def analysis_benchmark():
-    """Run deterministic self-supervised semantic regression benchmarks."""
-    console.print_json(data=benchmark_analysis(cfg()))
+    if entity_type=="opportunity":
+        meta=db.query_df("SELECT id_opportunity,project_title,plan_title,professor_name FROM opportunities")
+        df=df.merge(meta,left_on="entity_id",right_on="id_opportunity",how="left")
+        console.print(df[["query_score","entity_id","project_title","plan_title","professor_name"]].to_string(index=False))
+    else:
+        meta=db.query_df("SELECT siape,canonical_name,department FROM professors")
+        df=df.merge(meta,left_on="entity_id",right_on="siape",how="left")
+        console.print(df[["query_score","entity_id","canonical_name","department"]].to_string(index=False))
 
 @prof_app.command("list")
 def professor_list(limit:int=50):

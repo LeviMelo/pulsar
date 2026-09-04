@@ -1,0 +1,6 @@
+column_name,column_type,null,key,default,extra
+entity_type,VARCHAR,YES,,,
+entity_id,VARCHAR,YES,,,
+document_text,VARCHAR,YES,,,
+document_hash,VARCHAR,YES,,,
+built_at,VARCHAR,YES,,,

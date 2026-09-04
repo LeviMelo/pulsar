@@ -1,0 +1,7 @@
+column_name,column_type,null,key,default,extra
+model_id,VARCHAR,NO,PRI,,
+corpus_hash,VARCHAR,YES,,,
+config_json,VARCHAR,YES,,,
+corpus_stats_json,VARCHAR,YES,,,
+benchmark_json,VARCHAR,YES,,,
+created_at,VARCHAR,YES,,,

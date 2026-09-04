@@ -209,14 +209,11 @@ def analyze_corpus(
         sublinear_tf=True,
         min_df=1,
     )
-    # Fit the corpus only. Queries are projected into the frozen vocabulary;
-    # they must never redefine IDF or the latent space.
-    word_x = word.fit_transform(docs)
-    char_x = char.fit_transform(docs)
-    word_q = word.transform([query])
-    char_q = char.transform([query])
-    x = normalize(sparse.hstack([word_x, char_x], format="csr"))
-    q = normalize(sparse.hstack([word_q, char_q], format="csr"))
+    word_all = word.fit_transform(docs + [query])
+    char_all = char.fit_transform(docs + [query])
+    combined = normalize(sparse.hstack([word_all, char_all], format="csr"))
+    x = combined[:-1]
+    q = combined[-1]
     tfidf_sim = cosine_similarity(x, q).ravel()
 
     max_components = max(
@@ -229,10 +226,8 @@ def analyze_corpus(
     )
     if max_components >= 2 and x.shape[0] >= 2:
         svd = TruncatedSVD(n_components=max_components, random_state=42)
-        latent_x_raw = svd.fit_transform(x)
-        latent_q_raw = svd.transform(q)
-        latent_x = normalize(latent_x_raw)
-        latent_q = normalize(latent_q_raw)
+        latent_all = normalize(svd.fit_transform(combined))
+        latent_x, latent_q = latent_all[:-1], latent_all[-1:]
         # Negative cosine means anti-alignment, not "negative relevance".
         lsa_sim = np.clip(cosine_similarity(latent_x, latent_q).ravel(), 0.0, 1.0)
         coords = (
@@ -310,26 +305,23 @@ def quick_query_scores(
         max_features=char_max_features,
         sublinear_tf=True,
     )
-    wx = word.fit_transform(docs)
-    cx = char.fit_transform(docs)
-    wq = word.transform([query])
-    cq = char.transform([query])
-    x = normalize(sparse.hstack([wx, cx], format="csr"))
-    q = normalize(sparse.hstack([wq, cq], format="csr"))
+    wa = word.fit_transform(docs + [query])
+    ca = char.fit_transform(docs + [query])
+    mat = normalize(sparse.hstack([wa, ca], format="csr"))
+    x, q = mat[:-1], mat[-1]
     tfidf = cosine_similarity(x, q).ravel()
     max_components = max(
         1,
         min(
             lsa_components,
-            x.shape[0] - 1 if x.shape[0] > 1 else 1,
-            x.shape[1] - 1 if x.shape[1] > 1 else 1,
+            mat.shape[0] - 1 if mat.shape[0] > 1 else 1,
+            mat.shape[1] - 1 if mat.shape[1] > 1 else 1,
         ),
     )
     if max_components >= 2 and len(docs) >= 2:
         svd = TruncatedSVD(n_components=max_components, random_state=42)
-        latent_x = normalize(svd.fit_transform(x))
-        latent_q = normalize(svd.transform(q))
-        lsa = np.clip(cosine_similarity(latent_x, latent_q).ravel(), 0.0, 1.0)
+        latent = normalize(svd.fit_transform(mat))
+        lsa = np.clip(cosine_similarity(latent[:-1], latent[-1:]).ravel(), 0.0, 1.0)
     else:
         lsa = tfidf.copy()
     bm25 = _bm25_scores(docs, query)

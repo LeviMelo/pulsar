@@ -1,0 +1,6 @@
+column_name,column_type,null,key,default,extra
+project_code,VARCHAR,NO,PRI,,
+title,VARCHAR,YES,,,
+area,VARCHAR,YES,,,
+first_seen_at,VARCHAR,YES,,,
+last_seen_at,VARCHAR,YES,,,

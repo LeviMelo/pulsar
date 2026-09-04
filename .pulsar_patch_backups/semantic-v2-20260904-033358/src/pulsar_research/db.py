@@ -206,84 +206,6 @@ CREATE TABLE IF NOT EXISTS sync_runs (
     status VARCHAR,
     details_json VARCHAR
 );
-
--- Semantic Engine v2: versioned, decomposable, query-independent model outputs.
-CREATE TABLE IF NOT EXISTS semantic_runs (
-    model_id VARCHAR PRIMARY KEY,
-    corpus_hash VARCHAR,
-    config_json VARCHAR,
-    corpus_stats_json VARCHAR,
-    benchmark_json VARCHAR,
-    created_at VARCHAR
-);
-
-CREATE TABLE IF NOT EXISTS semantic_entity_scores (
-    model_id VARCHAR,
-    entity_type VARCHAR,
-    entity_id VARCHAR,
-    domain_word DOUBLE,
-    domain_char DOUBLE,
-    domain_lsa DOUBLE,
-    domain_bm25f DOUBLE,
-    domain_fit DOUBLE,
-    method_word DOUBLE,
-    method_char DOUBLE,
-    method_lsa DOUBLE,
-    method_bm25f DOUBLE,
-    method_fit DOUBLE,
-    skill_word DOUBLE,
-    skill_char DOUBLE,
-    skill_lsa DOUBLE,
-    skill_bm25f DOUBLE,
-    skill_fit DOUBLE,
-    combined_fit DOUBLE,
-    cluster_id BIGINT,
-    x DOUBLE,
-    y DOUBLE,
-    analyzed_at VARCHAR
-);
-
-CREATE TABLE IF NOT EXISTS semantic_topics (
-    model_id VARCHAR,
-    space VARCHAR,
-    topic_id BIGINT,
-    label VARCHAR,
-    top_terms_json VARCHAR,
-    diagnostics_json VARCHAR,
-    analyzed_at VARCHAR
-);
-
-CREATE TABLE IF NOT EXISTS semantic_entity_topics (
-    model_id VARCHAR,
-    entity_type VARCHAR,
-    entity_id VARCHAR,
-    space VARCHAR,
-    topic_id BIGINT,
-    weight DOUBLE,
-    analyzed_at VARCHAR
-);
-
-CREATE TABLE IF NOT EXISTS semantic_professor_evidence (
-    model_id VARCHAR,
-    siape VARCHAR,
-    evidence_rank BIGINT,
-    item_type VARCHAR,
-    item_id VARCHAR,
-    label VARCHAR,
-    score DOUBLE,
-    payload_json VARCHAR,
-    analyzed_at VARCHAR
-);
-
-CREATE TABLE IF NOT EXISTS semantic_benchmarks (
-    model_id VARCHAR,
-    benchmark VARCHAR,
-    channel VARCHAR,
-    metric VARCHAR,
-    value DOUBLE,
-    payload_json VARCHAR,
-    analyzed_at VARCHAR
-);
 """
 
 
@@ -303,7 +225,7 @@ class Database:
     def initialize(self) -> None:
         with self.connect() as con:
             con.execute(SCHEMA_SQL)
-            con.execute("INSERT OR REPLACE INTO meta VALUES ('schema_version', '2', ?)", [utcnow()])
+            con.execute("INSERT OR REPLACE INTO meta VALUES ('schema_version', '1', ?)", [utcnow()])
             con.execute("CHECKPOINT")
 
     def query_df(self, sql: str, params: list[Any] | tuple[Any, ...] | None = None):

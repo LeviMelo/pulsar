@@ -60,12 +60,7 @@ def create_campaign(
     campaign_id = uuid.uuid4().hex[:12]
     subject_template = subject_template or _read_default_template("default_subject.j2")
     body_template = body_template or _read_default_template("default_body.j2")
-    try:
-        current_model = str(db.query_df("SELECT value FROM meta WHERE key='current_semantic_model_id'").iloc[0]["value"])
-    except Exception:
-        current_model = ""
     criteria = {
-        "semantic_model_id": current_model,
         "funded_only": funded_only, "centers": centers or [],
         "min_opportunity_fit": min_opportunity_fit, "min_professor_fit": min_professor_fit,
         "exclude_already_contacted": exclude_already_contacted,

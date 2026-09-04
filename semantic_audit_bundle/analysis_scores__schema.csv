@@ -1,0 +1,11 @@
+column_name,column_type,null,key,default,extra
+entity_type,VARCHAR,YES,,,
+entity_id,VARCHAR,YES,,,
+tfidf_similarity,DOUBLE,YES,,,
+lsa_similarity,DOUBLE,YES,,,
+bm25_similarity,DOUBLE,YES,,,
+combined_score,DOUBLE,YES,,,
+cluster_id,BIGINT,YES,,,
+x,DOUBLE,YES,,,
+y,DOUBLE,YES,,,
+analyzed_at,VARCHAR,YES,,,

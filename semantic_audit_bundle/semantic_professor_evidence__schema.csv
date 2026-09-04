@@ -1,0 +1,10 @@
+column_name,column_type,null,key,default,extra
+model_id,VARCHAR,YES,,,
+siape,VARCHAR,YES,,,
+evidence_rank,BIGINT,YES,,,
+item_type,VARCHAR,YES,,,
+item_id,VARCHAR,YES,,,
+label,VARCHAR,YES,,,
+score,DOUBLE,YES,,,
+payload_json,VARCHAR,YES,,,
+analyzed_at,VARCHAR,YES,,,

@@ -43,51 +43,32 @@ def fmt_int(value) -> int:
         return 0
 
 
-def current_model_id() -> str:
-    try:
-        df = q("SELECT value FROM meta WHERE key='current_semantic_model_id'")
-        return str(df.iloc[0]["value"]) if len(df) else ""
-    except Exception:
-        return ""
-
-
-def topic_summary(entity_type: str, space: str = "domain") -> pd.DataFrame:
-    """Summarize normalized v2 topic shares, with legacy fallback."""
-    model_id = current_model_id()
-    if model_id and db.table_exists("semantic_entity_topics") and db.table_exists("semantic_topics"):
-        return q(
-            """
-            WITH ranked AS (
-                SELECT entity_id,topic_id,weight,
-                       ROW_NUMBER() OVER (PARTITION BY entity_id ORDER BY weight DESC,topic_id) topic_rank
-                FROM semantic_entity_topics
-                WHERE model_id=? AND entity_type=? AND space=?
-            )
-            SELECT t.topic_id,t.label AS topic,
-                   ROUND(AVG(r.weight),4) AS mean_share,
-                   SUM(CASE WHEN r.topic_rank=1 THEN 1 ELSE 0 END) AS dominant_entities,
-                   SUM(CASE WHEN r.weight>=0.15 THEN 1 ELSE 0 END) AS entities_ge_15pct
-            FROM ranked r
-            JOIN semantic_topics t
-              ON t.model_id=? AND t.space=? AND t.topic_id=r.topic_id
-            GROUP BY t.topic_id,t.label
-            ORDER BY dominant_entities DESC,mean_share DESC,t.topic_id
-            """,
-            (model_id, entity_type, space, model_id, space),
-        )
+def topic_summary(entity_type: str) -> pd.DataFrame:
+    """Summarize normalized NMF topic shares for one entity family."""
     return q(
         """
         WITH ranked AS (
-            SELECT entity_id,topic_id,weight,
-                   ROW_NUMBER() OVER (PARTITION BY entity_id ORDER BY weight DESC,topic_id) topic_rank
-            FROM entity_topics WHERE entity_type=?
+            SELECT
+                entity_id,
+                topic_id,
+                weight,
+                ROW_NUMBER() OVER (
+                    PARTITION BY entity_id
+                    ORDER BY weight DESC, topic_id
+                ) AS topic_rank
+            FROM entity_topics
+            WHERE entity_type=?
         )
-        SELECT t.topic_id,t.label AS topic,ROUND(AVG(r.weight),4) AS mean_share,
-               SUM(CASE WHEN r.topic_rank=1 THEN 1 ELSE 0 END) AS dominant_entities,
-               SUM(CASE WHEN r.weight>=0.15 THEN 1 ELSE 0 END) AS entities_ge_15pct
-        FROM ranked r JOIN analysis_topics t USING(topic_id)
-        GROUP BY t.topic_id,t.label
-        ORDER BY dominant_entities DESC,mean_share DESC,t.topic_id
+        SELECT
+            t.topic_id,
+            t.label AS topic,
+            ROUND(AVG(r.weight), 4) AS mean_share,
+            SUM(CASE WHEN r.topic_rank=1 THEN 1 ELSE 0 END) AS dominant_entities,
+            SUM(CASE WHEN r.weight>=0.15 THEN 1 ELSE 0 END) AS entities_ge_15pct
+        FROM ranked r
+        JOIN analysis_topics t USING(topic_id)
+        GROUP BY t.topic_id, t.label
+        ORDER BY dominant_entities DESC, mean_share DESC, t.topic_id
         """,
         (entity_type,),
     )
@@ -426,149 +407,85 @@ with professors_tab:
 
 
 with semantic_tab:
-    st.subheader("Semantic Engine v2")
-    model_id = current_model_id()
-    if model_id:
-        run = q(
-            "SELECT model_id,corpus_hash,config_json,corpus_stats_json,created_at FROM semantic_runs WHERE model_id=?",
-            (model_id,),
-        )
-        if len(run):
-            rr = run.iloc[0]
-            st.caption(
-                f"Model `{model_id}` · corpus `{str(rr['corpus_hash'])[:12]}` · built {rr['created_at']}. "
-                "All query scoring projects into corpus-fitted spaces; queries do not refit IDF/LSA."
-            )
-            with st.expander("Model configuration / corpus diagnostics"):
-                a, b = st.columns(2)
-                try:
-                    a.json(json.loads(rr["config_json"] or "{}"))
-                except Exception:
-                    a.code(str(rr["config_json"] or ""))
-                try:
-                    b.json(json.loads(rr["corpus_stats_json"] or "{}"))
-                except Exception:
-                    b.code(str(rr["corpus_stats_json"] or ""))
-
-        benchmarks = q(
-            """
-            SELECT benchmark,channel,metric,ROUND(value,4) AS value
-            FROM semantic_benchmarks WHERE model_id=?
-            ORDER BY benchmark,metric,channel
-            """,
-            (model_id,),
-        )
-        if len(benchmarks):
-            st.markdown("#### Self-supervised semantic benchmarks")
-            st.caption("Title→body tests precise recovery; sibling-plan tests broader project-level semantic recovery.")
-            st.dataframe(benchmarks, use_container_width=True, hide_index=True)
-    else:
-        st.warning("No Semantic Engine v2 run yet. Run `pulsar analyze rebuild`.")
-
+    st.subheader("Semantic landscape")
+    st.caption(
+        "Profile fit is relevance to the semantic profile configured in `config/profile.yaml`; "
+        "clusters and coordinates are corpus-native sparse/LSA outputs, not transformer embeddings."
+    )
     entity_type = st.radio("Entities", ["opportunity", "professor"], horizontal=True)
-    if model_id and db.table_exists("semantic_entity_scores"):
-        sdf = q(
-            """
-            SELECT entity_id,combined_fit AS combined_score,
-                   domain_fit,method_fit,skill_fit,
-                   domain_word,domain_char,domain_lsa,domain_bm25f,
-                   cluster_id,x,y
-            FROM semantic_entity_scores
-            WHERE model_id=? AND entity_type=?
-            """,
-            (model_id, entity_type),
-        )
-    else:
-        sdf = q(
-            """
-            SELECT entity_id,combined_score,tfidf_similarity AS domain_word,
-                   tfidf_similarity AS domain_char,lsa_similarity AS domain_lsa,
-                   bm25_similarity AS domain_bm25f,combined_score AS domain_fit,
-                   0.0 AS method_fit,0.0 AS skill_fit,cluster_id,x,y
-            FROM analysis_scores WHERE entity_type=?
-            """,
-            (entity_type,),
-        )
-
+    sdf = q(
+        """
+        SELECT entity_id,combined_score,tfidf_similarity,lsa_similarity,bm25_similarity,cluster_id,x,y
+        FROM analysis_scores WHERE entity_type=?
+        """,
+        (entity_type,),
+    )
     if len(sdf):
         if entity_type == "opportunity":
             names = q(
                 """
-                SELECT id_opportunity AS entity_id,
-                       COALESCE(NULLIF(plan_title,''),project_title,id_opportunity) AS display_label,
-                       professor_name AS secondary
+                SELECT
+                    id_opportunity AS entity_id,
+                    COALESCE(NULLIF(plan_title,''), project_title, id_opportunity) AS display_label,
+                    professor_name AS secondary
                 FROM opportunities
                 """
             )
         else:
             names = q(
-                "SELECT siape AS entity_id,canonical_name AS display_label,department AS secondary FROM professors"
+                """
+                SELECT
+                    siape AS entity_id,
+                    canonical_name AS display_label,
+                    department AS secondary
+                FROM professors
+                """
             )
         sdf = sdf.merge(names, on="entity_id", how="left")
         sdf["cluster"] = sdf["cluster_id"].fillna(-1).astype(int).astype(str)
         sdf["plot_size"] = sdf["combined_score"].fillna(0).clip(lower=0) + 0.01
 
-        st.markdown("#### Deterministic project landscape")
-        st.caption(
-            "Coordinates are PCoA over project-level cosine distances; clusters are agglomerative/cosine. "
-            "Sibling work plans inherit their project's location instead of distorting the landscape."
+        st.scatter_chart(
+            sdf,
+            x="x",
+            y="y",
+            color="cluster",
+            size="plot_size",
+            use_container_width=True,
         )
-        st.scatter_chart(sdf, x="x", y="y", color="cluster", size="plot_size", use_container_width=True)
-        show_cols = [
-            "entity_id","display_label","secondary","combined_score","domain_fit","method_fit","skill_fit",
-            "cluster_id","x","y"
-        ]
-        st.dataframe(sdf[show_cols].sort_values("combined_score", ascending=False), use_container_width=True, hide_index=True)
+        st.dataframe(
+            sdf[
+                [
+                    "entity_id","display_label","secondary","combined_score","tfidf_similarity",
+                    "lsa_similarity","bm25_similarity","cluster_id","x","y"
+                ]
+            ].sort_values("combined_score", ascending=False),
+            use_container_width=True,
+            hide_index=True,
+        )
 
-        st.markdown("#### Topic spaces")
-        topic_space = st.radio("Topic facet", ["domain", "methods", "skills"], horizontal=True)
-        ts = topic_summary(entity_type, topic_space)
-        if len(ts):
-            st.dataframe(ts, use_container_width=True, hide_index=True)
-        else:
-            st.info("No topic weights for this entity/facet.")
+        st.subheader("Topic factors")
+        ts = topic_summary(entity_type)
+        st.dataframe(ts, use_container_width=True, hide_index=True)
 
         choices = {
             f"{str(r.display_label or r.entity_id)[:100]} · {r.entity_id}": r.entity_id
             for r in sdf.itertuples()
         }
         if choices:
-            selected = st.selectbox("Inspect entity semantics", list(choices))
+            selected = st.selectbox("Inspect entity topic composition", list(choices))
             entity_id = choices[selected]
-            detail_score = sdf[sdf["entity_id"] == entity_id]
-            if len(detail_score):
-                rr = detail_score.iloc[0]
-                a, b, c, d = st.columns(4)
-                a.metric("Combined", f"{float(rr['combined_score']):.3f}")
-                b.metric("Domain", f"{float(rr['domain_fit']):.3f}")
-                c.metric("Methods", f"{float(rr['method_fit']):.3f}")
-                d.metric("Skills", f"{float(rr['skill_fit']):.3f}")
-
-            if model_id:
-                detail = q(
-                    """
-                    SELECT t.topic_id,t.label AS topic,ROUND(et.weight,4) AS share
-                    FROM semantic_entity_topics et
-                    JOIN semantic_topics t
-                      ON t.model_id=et.model_id AND t.space=et.space AND t.topic_id=et.topic_id
-                    WHERE et.model_id=? AND et.entity_type=? AND et.entity_id=? AND et.space=?
-                    ORDER BY et.weight DESC
-                    """,
-                    (model_id, entity_type, entity_id, topic_space),
-                )
-                st.dataframe(detail, use_container_width=True, hide_index=True)
-                if entity_type == "professor":
-                    evidence = q(
-                        """
-                        SELECT evidence_rank,item_type,label,ROUND(score,4) AS score
-                        FROM semantic_professor_evidence
-                        WHERE model_id=? AND siape=? ORDER BY evidence_rank
-                        """,
-                        (model_id, entity_id),
-                    )
-                    if len(evidence):
-                        st.markdown("**Top portfolio evidence for domain fit**")
-                        st.dataframe(evidence, use_container_width=True, hide_index=True)
+            detail = q(
+                """
+                SELECT t.topic_id,t.label AS topic,ROUND(et.weight,4) AS share
+                FROM entity_topics et
+                JOIN analysis_topics t USING(topic_id)
+                WHERE et.entity_type=? AND et.entity_id=?
+                ORDER BY et.weight DESC
+                """,
+                (entity_type, entity_id),
+            )
+            st.dataframe(detail, use_container_width=True, hide_index=True)
     else:
         st.info("Run `pulsar analyze rebuild` first.")
 
@@ -594,7 +511,7 @@ with campaigns_tab:
         min_opp = a.slider("Minimum opportunity profile fit", 0.0, 1.0, 0.0, 0.01)
         min_prof = b.slider("Minimum professor profile fit", 0.0, 1.0, 0.0, 0.01)
 
-        semantic_query = st.text_input("Campaign semantic query (optional; fixed-corpus word/char/LSA/BM25F + RRF)")
+        semantic_query = st.text_input("Campaign semantic query (optional; sparse TF-IDF/LSA/BM25)")
         min_query_score = st.slider("Minimum campaign-query score", 0.0, 1.0, 0.0, 0.01)
         keyword_text = st.text_input("Required keywords (comma-separated; optional)")
 

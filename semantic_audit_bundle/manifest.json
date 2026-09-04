@@ -1,0 +1,253 @@
+{
+  "created_at": "2026-09-04T03:51:15.773303",
+  "database": "C:\\Users\\Galaxy\\LEVI\\projects\\pulsar\\data\\pulsar.duckdb",
+  "all_database_tables": [
+    "analysis_documents",
+    "analysis_scores",
+    "analysis_topics",
+    "applications",
+    "campaign_messages",
+    "campaign_recipients",
+    "campaigns",
+    "collaboration_edges",
+    "entity_topics",
+    "global_metrics",
+    "meta",
+    "opportunities",
+    "professor_aliases",
+    "professor_metrics",
+    "professors",
+    "projects",
+    "semantic_benchmarks",
+    "semantic_entity_scores",
+    "semantic_entity_topics",
+    "semantic_professor_evidence",
+    "semantic_runs",
+    "semantic_topics",
+    "sigaa_public_errors",
+    "sigaa_public_fetches",
+    "sigaa_public_fields",
+    "sigaa_public_forms",
+    "sigaa_public_images",
+    "sigaa_public_input_matches",
+    "sigaa_public_input_professors",
+    "sigaa_public_lattes_documents",
+    "sigaa_public_lattes_flat",
+    "sigaa_public_links",
+    "sigaa_public_pages",
+    "sigaa_public_professors",
+    "sigaa_public_resolution_candidates",
+    "sigaa_public_table_rows",
+    "sigaa_public_text_nodes",
+    "sync_runs"
+  ],
+  "exported_tables": {
+    "analysis_documents": {
+      "rows": 252,
+      "columns": [
+        "entity_type",
+        "entity_id",
+        "document_text",
+        "document_hash",
+        "built_at"
+      ]
+    },
+    "analysis_scores": {
+      "rows": 252,
+      "columns": [
+        "entity_type",
+        "entity_id",
+        "tfidf_similarity",
+        "lsa_similarity",
+        "bm25_similarity",
+        "combined_score",
+        "cluster_id",
+        "x",
+        "y",
+        "analyzed_at"
+      ]
+    },
+    "analysis_topics": {
+      "rows": 14,
+      "columns": [
+        "topic_id",
+        "label",
+        "top_terms_json",
+        "analyzed_at"
+      ]
+    },
+    "applications": {
+      "rows": 187,
+      "columns": [
+        "id_opportunity",
+        "status",
+        "raw_status",
+        "applied_at",
+        "synced_at"
+      ]
+    },
+    "entity_topics": {
+      "rows": 3528,
+      "columns": [
+        "entity_type",
+        "entity_id",
+        "topic_id",
+        "weight",
+        "analyzed_at"
+      ]
+    },
+    "opportunities": {
+      "rows": 187,
+      "columns": [
+        "id_opportunity",
+        "project_code",
+        "project_title",
+        "plan_title",
+        "professor_siape",
+        "professor_name",
+        "vacancies_text",
+        "funded_slots",
+        "has_funding",
+        "funding_basis",
+        "unit",
+        "department",
+        "center",
+        "large_area",
+        "area",
+        "edital",
+        "quota",
+        "status",
+        "has_apply_link",
+        "has_details_link",
+        "details_collected",
+        "introduction_justification",
+        "objectives",
+        "methodology",
+        "acquired_skills",
+        "references_text",
+        "discovered_at",
+        "updated_at",
+        "applied_at"
+      ]
+    },
+    "professors": {
+      "rows": 65,
+      "columns": [
+        "siape",
+        "canonical_name",
+        "department",
+        "unit",
+        "center",
+        "email",
+        "phone",
+        "profile_url",
+        "photo_url",
+        "lattes_id",
+        "lattes_update_date",
+        "lattes_update_time",
+        "profile_summary",
+        "public_scraped_at",
+        "source_json_path"
+      ]
+    },
+    "projects": {
+      "rows": 89,
+      "columns": [
+        "project_code",
+        "title",
+        "area",
+        "first_seen_at",
+        "last_seen_at"
+      ]
+    },
+    "semantic_benchmarks": {
+      "rows": 32,
+      "columns": [
+        "model_id",
+        "benchmark",
+        "channel",
+        "metric",
+        "value",
+        "payload_json",
+        "analyzed_at"
+      ]
+    },
+    "semantic_entity_scores": {
+      "rows": 252,
+      "columns": [
+        "model_id",
+        "entity_type",
+        "entity_id",
+        "domain_word",
+        "domain_char",
+        "domain_lsa",
+        "domain_bm25f",
+        "domain_fit",
+        "method_word",
+        "method_char",
+        "method_lsa",
+        "method_bm25f",
+        "method_fit",
+        "skill_word",
+        "skill_char",
+        "skill_lsa",
+        "skill_bm25f",
+        "skill_fit",
+        "combined_fit",
+        "cluster_id",
+        "x",
+        "y",
+        "analyzed_at"
+      ]
+    },
+    "semantic_entity_topics": {
+      "rows": 11594,
+      "columns": [
+        "model_id",
+        "entity_type",
+        "entity_id",
+        "space",
+        "topic_id",
+        "weight",
+        "analyzed_at"
+      ]
+    },
+    "semantic_professor_evidence": {
+      "rows": 325,
+      "columns": [
+        "model_id",
+        "siape",
+        "evidence_rank",
+        "item_type",
+        "item_id",
+        "label",
+        "score",
+        "payload_json",
+        "analyzed_at"
+      ]
+    },
+    "semantic_runs": {
+      "rows": 1,
+      "columns": [
+        "model_id",
+        "corpus_hash",
+        "config_json",
+        "corpus_stats_json",
+        "benchmark_json",
+        "created_at"
+      ]
+    },
+    "semantic_topics": {
+      "rows": 34,
+      "columns": [
+        "model_id",
+        "space",
+        "topic_id",
+        "label",
+        "top_terms_json",
+        "diagnostics_json",
+        "analyzed_at"
+      ]
+    }
+  }
+}
