@@ -43,7 +43,7 @@ PROFILE = {
     "contacts": [{"address": "levi.amorim@famed.ufal.br", "purpose": "iniciação científica"},
                  {"address": "levi.amorim@nees.ufal.br", "purpose": "outros assuntos"}],
     "sending_note": "Esta mensagem sai do meu endereço pessoal.",
-    "expertise_note": "O meu trabalho é sobretudo computacional: são dois anos em ciência de dados, epidemiologia e computação científica.",
+    "expertise_note": "São dois anos trabalhando com ciência de dados, epidemiologia e computação científica, e é aí que eu rendo mais: em qualquer frente que se resolva no computador.",
     "links": [{"label": "CMapDoc", "url": "https://levimelo.github.io/mapdoc/"}],
     "campaign_signature": "Levi de Melo Amorim",
 }
@@ -122,17 +122,17 @@ def test_every_draft_separates_registration_from_indication():
         text = body(percentile)
         # The registration is owned, not disclaimed: telling a professor it is
         # "no commitment" is both discourteous and, by now, untrue.
-        assert "antes de eu escrever a qualquer orientador" in text
-        assert "só posso confirmar um vínculo e prefiro combinar isso antes" in text
-        assert "Com bolsa ou sem" in text, "the offer is not conditioned on funding"
-        assert "não é indicação nem compromisso" not in text
+        assert "chegou antes de mim" in text
+        assert "a indicação é única" in text
+        assert "vale com bolsa ou sem ela" in text, "the offer is not conditioned on funding"
+        assert "não é indicação nem compromisso" not in text,             "disclaiming a registration the professor can see is discourteous and untrue"
 
 
 def test_the_scholarship_question_is_asked_plainly_in_every_draft():
     for percentile in (0.0, 50.0, 100.0):
         text = body(percentile)
-        assert "A bolsa que consta no edital ainda está livre?" in text
-        assert "só posso confirmar um vínculo" in text
+        assert "A bolsa que consta no edital ainda está disponível?" in text
+        assert "Como só posso confirmar um vínculo" in text
 
 
 def test_the_offer_is_built_from_the_plan_not_from_a_fixed_list():
@@ -208,7 +208,7 @@ def test_without_statistics_the_footer_is_omitted_and_the_message_still_stands()
     text = body(98.0, pulsar=None)
     assert "sistema de prospecção" not in text
     assert "Registrei interesse no plano" in text
-    assert "A bolsa que consta no edital ainda está livre?" in text
+    assert "A bolsa que consta no edital ainda está disponível?" in text
 
 
 def test_context_never_invents_a_fit_when_the_ranking_produced_none():
@@ -255,8 +255,8 @@ def test_every_draft_says_where_the_work_is_best_spent():
     """A medical student writing to a lab is otherwise read as asking for bench time."""
     for percentile in (7.0, 98.0):
         text = body(percentile)
-        assert "sobretudo computacional" in text
-        assert "dois anos em ciência de dados" in text
+        assert "dois anos trabalhando com ciência de dados" in text
+        assert "se resolva no computador" in text
 
 
 # Phrasings that kept reappearing while this template was being written: the

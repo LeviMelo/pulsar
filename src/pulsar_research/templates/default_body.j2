@@ -4,7 +4,7 @@ Sou Levi de Melo Amorim, {{ identity_line }}. Registrei interesse no plano “{{
 
 Cheguei até ele pelo PULSAR, um sistema que construí para organizar a minha própria candidatura: ele indexou os {{ pulsar.n_opportunities|milhar if pulsar else '' }} planos deste edital junto com a produção pública dos orientadores e os ordenou por afinidade com o que eu sei fazer.{% if fit_is_strong %} O seu ficou em {{ opportunity_rank }}º{% if matched_skills %}, sobretudo por {{ matched_skills[:2]|join(' e ')|lower }}{% endif %}.{% elif matched_skills %} O seu plano pede {{ matched_skills[:2]|join(' e ')|lower }}, que é trabalho que eu já faço.{% endif %}{{ rank_block }}
 
-O registro saiu do sistema em todos os planos compatíveis, antes de eu escrever a qualquer orientador. Escrevo agora porque só posso confirmar um vínculo e prefiro combinar isso antes de usá-lo. Com bolsa ou sem, se houver frente aqui em que eu seja útil, tenho interesse.
+O registro de interesse foi automático, em todos os planos suficientemente compatíveis, e por isso chegou antes de mim: estou falando individualmente com cada orientador antes de indicar qualquer coisa no SIGAA, porque a indicação é única e não quero travar conversas que ainda estão abertas dos dois lados. O interesse vale com bolsa ou sem ela.
 {% if expertise_note %}
 
 {{ expertise_note }}
@@ -19,16 +19,16 @@ No seu plano especificamente, eu poderia assumir:
 {% endif %}
 {% if annexes %}
 
-Anexei {{ annexes|length }} documentos{% if annex_recent_count %}, {{ annex_recent_count }} deles escritos nesta semana{% endif %}. São rascunhos avançados, não publicações:
+Anexei {{ annexes|length }} documentos{% if annex_recent_count %}, {{ annex_recent_count }} deles escritos nesta semana{% endif %} — rascunhos avançados, não publicações:
 
 {% for a in annexes %}
 - {{ a.label }}{{ "  ← o mais próximo do seu plano" if a.emphasised else "" }}
 {% endfor %}
 {% endif %}
 
-A bolsa que consta no edital ainda está livre? O que está publicado nem sempre acompanha o que já foi combinado, e como só posso confirmar um vínculo, preciso saber antes de o prazo fechar.
+A bolsa que consta no edital ainda está disponível? Como só posso confirmar um vínculo, preciso saber onde ele faz sentido antes de o prazo fechar.
 
-A lista acima e o destaque no anexo são gerados pelo PULSAR a partir do texto do plano. Nem sempre acertam: se algo soar deslocado em relação ao que o plano realmente pede, é limitação do sistema, não desatenção minha.
+A lista de tarefas acima e o destaque no anexo saem do PULSAR, a partir do texto do plano. Nem sempre acertam; se algo soar deslocado, é limitação do sistema.
 
 {{ signature }}
 {% for c in contacts %}

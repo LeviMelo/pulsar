@@ -94,9 +94,9 @@ identity_line: >-
 # asking for bench time. "Dois anos" is independent, continuous practice — not a
 # formal appointment — so it is phrased as work done rather than a post held.
 expertise_note: >-
-  O meu trabalho é sobretudo computacional: são dois anos em ciência de dados,
-  epidemiologia e computação científica. Rendo mais em projetos que envolvam dados
-  ou trabalho de computador — aquisição, tratamento, modelagem, análise e a redação
+  São dois anos trabalhando com ciência de dados, epidemiologia e computação
+  científica, e é aí que eu rendo mais: em qualquer frente que passe por dados ou
+  se resolva no computador — aquisição, tratamento, modelagem, análise e a redação
   que sai daí.
 
 # Reserve, not a script. Nothing here is emitted unless it is selected against
