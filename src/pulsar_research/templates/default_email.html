@@ -45,9 +45,14 @@
       MRR {{ card.stats.benchmark.fused_mrr|decimal }} — método e resultados no relatório em anexo
     </div>
     {% endif %}
-    {% if card.percentile and card.reading and card.reading.facets %}
-    <div style="margin-top:9px;padding-top:9px;border-top:1px solid #e6eaee;color:#1a1a1a;">
-      este plano: percentil <strong>{{ card.percentile|round|int }}</strong>{% for key, label in facet_labels %}{% if key in card.reading.facets %} · {{ label }} p{{ card.reading.facets[key]|round|int }}{% endif %}{% endfor %}
+    {% if fit_bars %}
+    <div style="margin-top:10px;padding-top:9px;border-top:1px solid #e6eaee;">
+      <div style="color:#1a1a1a;">este plano, percentil <strong>{{ card.percentile|round|int }}</strong>:</div>
+      {# The same strings the plaintext footer prints, so the two alternatives
+         cannot drift. Monospace is what makes a drawn bar mean anything. #}
+      <div style="margin-top:3px;font-family:Consolas,'Liberation Mono',Menlo,monospace;font-size:12px;line-height:1.5;white-space:pre;">
+{% for label, drawn, value in fit_bars %}{{ "%-13s"|format(label) }}{{ drawn }}  {{ value }}
+{% endfor %}</div>
     </div>
     {% endif %}
     {% if links %}

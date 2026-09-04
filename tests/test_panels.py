@@ -7,6 +7,8 @@ the two drifting apart or the card outliving the data behind it.
 """
 from __future__ import annotations
 
+import re
+
 from pulsar_research.outreach.panels import benchmark_summary, card_lines, decimal
 
 ROWS = [
@@ -40,9 +42,15 @@ def test_the_footer_states_the_corpus_and_the_evaluation():
 def test_the_footer_reports_a_measured_fit_only_when_one_was_passed():
     without = card_lines({"stats": STATS, "reading": {}, "percentile": 0.0})
     assert not any("este plano" in line for line in without)
-    with_fit = card_lines({"stats": STATS, "reading": READING, "percentile": 98.0})
-    line = next(line for line in with_fit if "este plano" in line)
-    assert "percentil 98" in line and "tema p93" in line and "competências p62" in line
+    with_fit = "\n".join(card_lines({"stats": STATS, "reading": READING, "percentile": 98.0}))
+    assert "este plano, percentil 98:" in with_fit
+    # Drawn, not just stated: a bar is the whole reason the footer is worth having.
+    assert "█" in with_fit
+    # The block-drawing set, spelled out: a literal ▏-▉ inside a character class
+    # is a range over code points, not the set of partials.
+    glyphs = "█▏▎▍▌▋▊▉·"
+    for label, value in (("tema", "p93"), ("métodos", "p98"), ("competências", "p62")):
+        assert re.search(rf"{label}\s+[{glyphs}]+\s+{value}", with_fit), f"{label} bar missing"
 
 
 def test_no_statistics_means_no_footer_rather_than_an_empty_box():

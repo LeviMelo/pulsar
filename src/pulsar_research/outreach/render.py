@@ -16,7 +16,7 @@ from typing import Any, Mapping
 from jinja2 import Environment, StrictUndefined, Undefined
 
 from ..semantics.normalize import display_person_name
-from .panels import FACET_LABELS, card_lines, decimal
+from .panels import FACET_LABELS, card_lines, decimal, fit_bars, rank_scale
 
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 
@@ -90,22 +90,24 @@ def select_contributions(primary: Mapping[str, Any], profile: Mapping[str, Any])
     return chosen
 
 
-def select_works(primary: Mapping[str, Any], profile: Mapping[str, Any]) -> list[str]:
-    """At most two prior outputs, ranked by overlap with this plan's skills.
+def select_annexes(primary: Mapping[str, Any], profile: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Every annex, with at most one marked as closest to this plan.
 
-    An output that shares nothing with the plan is not evidence of anything the
-    recipient cares about, so a plan with no overlap gets no works at all rather
-    than the first two on the list.
+    All four are always named. An earlier version cited only the single best
+    match, which meant a week that produced four documents was presented as one,
+    and a plan matching nothing was offered nothing at all. Emphasis is the only
+    thing the plan decides: a genuine tie or no overlap simply leaves the list
+    unmarked, because pointing at an unrelated manuscript is worse than pointing
+    at none.
     """
     plan_skills = set(_plan_skill_ids(primary))
-    scored = []
-    for index, work in enumerate(profile.get("work_lines") or []):
-        if not isinstance(work, Mapping):
-            continue
-        overlap = len(plan_skills & set(work.get("tags") or []))
-        if overlap:
-            scored.append((-overlap, index, str(work.get("text", ""))))
-    return [text for _, _, text in sorted(scored)[:MAX_WORKS]]
+    annexes = [dict(a) for a in (profile.get("annexes") or []) if isinstance(a, Mapping)]
+    scores = [len(plan_skills & set(a.get("tags") or [])) for a in annexes]
+    best = max(scores, default=0)
+    winners = [i for i, score in enumerate(scores) if score == best]
+    for index, annex in enumerate(annexes):
+        annex["emphasised"] = bool(best) and len(winners) == 1 and index == winners[0]
+    return annexes
 
 
 def _rank_from_percentile(percentile: float, pulsar: Mapping[str, Any] | None) -> int:
@@ -130,6 +132,8 @@ def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping
     percentile = float(rationale.get("opportunity_percentile") or 0.0)
     pulsar = dict(extra or {}).get("pulsar")
     fit_is_strong = percentile >= STRONG_FIT_PERCENTILE
+    rank = _rank_from_percentile(percentile, pulsar)
+    annexes = select_annexes(primary, profile)
     return {
         **dict(recipient),
         "professor_name": display_person_name(recipient.get("professor_name", "")),
@@ -156,13 +160,20 @@ def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping
         "identity_line": profile.get("identity_line") or "",
         # A position is concrete where a percentile is jargon: "4º de 187" is
         # read correctly by everyone, "percentil 98" by fewer.
-        "opportunity_rank": _rank_from_percentile(percentile, pulsar),
+        "opportunity_rank": rank,
         "facet_labels": list(FACET_LABELS.items()),
         # Chosen against this plan's own extracted skills, not listed wholesale.
         "contributions": select_contributions(primary, profile),
-        "works": select_works(primary, profile),
+        "annexes": annexes,
+        "annex_recent_count": sum(1 for a in annexes if a.get("recent")),
         "about_lines": list(profile.get("about_lines") or []),
-        "annexes": list(profile.get("annexes") or []),
+        "contacts": list(profile.get("contacts") or []),
+        "sending_note": profile.get("sending_note") or "",
+        "expertise_note": profile.get("expertise_note") or "",
+        # One line, and only where a rank may be stated at all.
+        "rank_scale": rank_scale(rank, int((pulsar or {}).get("n_opportunities") or 0))
+                      if fit_is_strong else "",
+        "fit_bars": fit_bars(rationale.get("reading")) if fit_is_strong else [],
         "links": list(profile.get("links") or []),
         "signature": signature,
         "sender_name": profile.get("sender_name") or (signature.splitlines() or [""])[0],

@@ -31,6 +31,54 @@ FACET_LABELS: dict[str, str] = {
 }
 
 
+# Full block plus the eighth-width partials, so a bar has sub-character
+# resolution and two nearby values stay visually distinct.
+_PARTIALS = "▏▎▍▌▋▊▉"
+_TRACK = "·"
+INDENT = "   "
+
+
+def bar(value: float, maximum: float, width: int) -> str:
+    """A horizontal bar of `width` cells, with an explicit track behind it.
+
+    The track matters: without it a reader cannot tell a short bar from a
+    truncated axis.
+    """
+    if maximum <= 0 or width <= 0:
+        return _TRACK * max(width, 0)
+    cells = max(0.0, min(1.0, value / maximum)) * width
+    full = int(cells)
+    out = "█" * min(full, width)
+    remainder = cells - full
+    if full < width and remainder >= 1 / 16:
+        out += _PARTIALS[min(len(_PARTIALS) - 1, int(remainder * 8))]
+    return out + _TRACK * (width - len(out))
+
+
+def rank_scale(rank: int, total: int, width: int = 38) -> str:
+    """One line placing a plan on the whole ranked list.
+
+    "5º de 187" is already concrete; seeing the marker sit hard against the left
+    end is what makes it land. Deliberately one line — the previous version of
+    this message carried a nine-row table and buried the question being asked.
+    """
+    if rank <= 0 or total <= 1:
+        return ""
+    position = min(width - 1, max(0, round((rank - 1) / (total - 1) * (width - 1))))
+    return f"{INDENT}1º ├{'─' * position}●{'─' * (width - 1 - position)}┤ {total}º"
+
+
+def fit_bars(reading: Mapping[str, Any] | None, width: int = 16) -> list[tuple[str, str, str]]:
+    """`(label, bar, value)` per facet, for the footer in either alternative.
+
+    Returned as parts rather than a formatted string so the HTML card and the
+    plaintext footer lay them out for their own medium while sharing the values.
+    """
+    facets = (reading or {}).get("facets") or {}
+    return [(FACET_LABELS[key], bar(float(facets[key]), 100.0, width), f"p{float(facets[key]):.0f}")
+            for key in FACET_LABELS if key in facets]
+
+
 def decimal(value: float, places: int = 2) -> str:
     """0.843 -> '0,84'. The email is in Portuguese; so is its decimal mark."""
     return f"{value:.{places}f}".replace(".", ",")
@@ -98,8 +146,10 @@ def card_lines(card: Mapping[str, Any] | None) -> list[str]:
             f"ranqueamento avaliado em {benchmark['n_tasks']} tarefas de recuperação "
             f"(MRR {decimal(benchmark['fused_mrr'])}); método e resultados no relatório em anexo"
         )
-    facets = ((card or {}).get("reading") or {}).get("facets") or {}
-    shown = [f"{FACET_LABELS[f]} p{float(facets[f]):.0f}" for f in FACET_LABELS if f in facets]
-    if shown and card.get("percentile"):
-        lines.append(f"este plano: percentil {float(card['percentile']):.0f} · " + " · ".join(shown))
+    bars = fit_bars((card or {}).get("reading")) if (card or {}).get("percentile") else []
+    if bars:
+        lines.append("")
+        lines.append(f"este plano, percentil {float(card['percentile']):.0f}:")
+        pad = max(len(label) for label, _, _ in bars) + 1
+        lines.extend(f"  {label.ljust(pad)}{drawn}  {value}" for label, drawn, value in bars)
     return lines

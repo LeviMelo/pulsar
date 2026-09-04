@@ -1133,6 +1133,48 @@ triage, not commitment, and conflating it with an indication misrepresents the
 operator to a professor who can see the SIGAA record. Every draft carries the
 distinction in one sentence, and a test pins it.
 
+**D36 — The registration is owned, not disclaimed.**
+"Não é indicação nem compromisso" was discourteous and, by then, false: an
+interest registered in SIGAA is visible to the professor and does carry weight.
+The message now says the interest is assumed and only the *formalisation* is
+pending, because the SIGAA link is singular. It also states that the offer does
+not depend on a bolsa — conditioning collaboration on funding, in a message whose
+whole argument is enthusiasm for the work, would read as cynical.
+
+**D37 — Every annex is named; at most one is pointed at.**
+Citing only the best-matching output presented a week that produced four
+documents as one. All four are listed with their real status, `annex_recent_count`
+carries the productivity claim ("3 deles escritos nesta semana"), and each date
+is printed inside its own PDF — 04/09, 02/09, 01/09, and 14/08 for the older one,
+which is flagged `recent: false`. Emphasis is the only thing the plan decides,
+and a tie or a no-overlap plan marks nothing rather than pointing at something
+unrelated.
+
+**D38 — The procedural assembly is disclosed at the point where it can fail.**
+The offer list and the annex emphasis are generated from the plan text and will
+sometimes misfire. Saying so — once, without apology — costs nothing and is the
+difference between a system that looks careless and one that knows its own error
+modes.
+
+**D39 — Two small charts, not a table.**
+A one-line rank scale in the body (strong fits only) and three facet bars in the
+footer. That is the whole graphical budget. It returns the technical texture the
+big table had while leaving the message readable and quotable.
+
+**D40 — The sender discrepancy is stated.**
+The institutional account cannot issue an app password, so submission happens
+through a personal Google account and the From line shows it. Rather than rely on
+a "Send mail as" alias, the message says where it comes from and lists both
+institutional addresses with what each is for; `reply_to` still routes a plain
+reply to FAMED. A cold email that appears to misrepresent its sender is worse
+than one that explains itself in a sentence.
+
+**D41 — The expertise is placed before the offer.**
+A medical student writing to a laboratory is otherwise read as asking for bench
+time. One sentence states that the work is computational, names the two years of
+continuous practice in data science, epidemiology and scientific computing, and
+says where the return is highest — phrased as work done, not as a post held.
+
 ---
 
 ## 23. Final note to the next agent

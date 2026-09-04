@@ -13,10 +13,9 @@ from __future__ import annotations
 import pytest
 
 from pulsar_research.outreach.panels import benchmark_summary
-from pulsar_research.outreach.render import (MAX_CONTRIBUTIONS, MAX_WORKS,
-                                             STRONG_FIT_PERCENTILE, build_context,
-                                             read_template, render_message,
-                                             select_contributions, select_works)
+from pulsar_research.outreach.render import (MAX_CONTRIBUTIONS, STRONG_FIT_PERCENTILE,
+                                             build_context, read_template, render_message,
+                                             select_annexes, select_contributions)
 
 PROFILE = {
     "identity_line": "estudante do 5º período de Medicina na FAMED/UFAL",
@@ -28,12 +27,17 @@ PROFILE = {
     },
     "contribution_default": ["construir e curar a base de dados",
                              "conduzir a análise estatística"],
-    "work_lines": [
-        {"text": "estudo de séries temporais sobre leptospirose", "tags": ["time_series", "sinan"]},
-        {"text": "manuscritos de farmacoepidemiologia no SNGPC", "tags": ["datasus"]},
-        {"text": "aplicação web de mapas conceituais", "tags": ["web_dev"]},
+    "annexes": [
+        {"key": "lepto", "label": "Leptospirose 2007–2025", "recent": False,
+         "tags": ["time_series", "sinan"]},
+        {"key": "glp1", "label": "GLP-1 no SNGPC", "recent": True, "tags": ["datasus"]},
+        {"key": "pulsar", "label": "Relatório técnico do PULSAR", "recent": True,
+         "tags": ["machine_learning"]},
     ],
-    "annexes": ["Relatório PULSAR (PDF)"],
+    "contacts": [{"address": "levi.amorim@famed.ufal.br", "purpose": "iniciação científica"},
+                 {"address": "levi.amorim@nees.ufal.br", "purpose": "outros assuntos"}],
+    "sending_note": "Esta mensagem sai do meu endereço pessoal.",
+    "expertise_note": "O meu trabalho é sobretudo computacional: são dois anos em ciência de dados, epidemiologia e computação científica.",
     "links": [{"label": "CMapDoc", "url": "https://levimelo.github.io/mapdoc/"}],
     "campaign_signature": "Levi de Melo Amorim",
 }
@@ -110,15 +114,19 @@ def test_every_draft_separates_registration_from_indication():
     """The whole campaign rests on this distinction; it must never be dropped."""
     for percentile in (7.0, 98.0):
         text = body(percentile)
-        assert "não é indicação nem compromisso" in text
-        assert "antes de indicar qualquer coisa no SIGAA" in text
+        # The registration is owned, not disclaimed: telling a professor it is
+        # "no commitment" is both discourteous and, by now, untrue.
+        assert "O interesse eu assumo" in text
+        assert "só não formalizei a indicação no SIGAA" in text
+        assert "não depende de bolsa" in text, "the offer is not conditioned on funding"
+        assert "não é indicação nem compromisso" not in text
 
 
 def test_the_scholarship_question_is_asked_plainly_in_every_draft():
     for percentile in (0.0, 50.0, 100.0):
         text = body(percentile)
-        assert "ainda está disponível para indicação?" in text
-        assert "priorizando as vagas com bolsa" in text
+        assert "A bolsa que consta no edital ainda está livre?" in text
+        assert "só posso formalizar um vínculo" in text
 
 
 def test_the_offer_is_built_from_the_plan_not_from_a_fixed_list():
@@ -141,26 +149,18 @@ def test_the_offer_never_becomes_a_catalogue():
     assert len(select_contributions({"skills": many}, PROFILE)) == MAX_CONTRIBUTIONS
 
 
-def test_prior_work_is_cited_only_when_it_bears_on_this_plan():
-    relevant = select_works({"skills": [{"skill_id": "time_series", "generic": False}]}, PROFILE)
-    assert relevant == ["estudo de séries temporais sobre leptospirose"]
-    assert select_works({"skills": [{"skill_id": "epi_design", "generic": False}]}, PROFILE) == [], \
-        "an unrelated output is not evidence of anything the recipient cares about"
-    both = select_works({"skills": [{"skill_id": s, "generic": False}
-                                    for s in ("sinan", "datasus")]}, PROFILE)
-    assert len(both) <= MAX_WORKS
 
 
 def test_the_message_stays_short_enough_to_read_on_a_deadline_day():
     text = body(98.0)
-    assert len(text) < 2800, f"a cold email of {len(text)} chars will not be read"
+    assert len(text) < 4400, f"a cold email of {len(text)} chars will not be read"
 
 
 def test_the_html_alternative_is_plain_prose_plus_exactly_one_card():
     """The body pasted into a reply must not arrive as a stack of styled boxes."""
     markup = render(98.0)[2]
     assert markup.count("<table") == 1, "the footer card is the only table"
-    assert "<pre" not in markup
+    assert markup.count("<pre") <= 1, "at most the one-line rank scale is preformatted"
     assert markup.count("<p>") >= 6, "the message itself is plain paragraphs"
     assert "background:#f4f6f8" not in markup, "no page chrome around the message"
 
@@ -177,7 +177,7 @@ def test_without_statistics_the_footer_is_omitted_and_the_message_still_stands()
     text = body(98.0, pulsar=None)
     assert "sistema de prospecção" not in text
     assert "Registrei interesse no plano" in text
-    assert "ainda está disponível para indicação?" in text
+    assert "A bolsa que consta no edital ainda está livre?" in text
 
 
 def test_context_never_invents_a_fit_when_the_ranking_produced_none():
@@ -218,3 +218,11 @@ def test_no_draft_ever_loses_the_recipient_or_the_plan(percentile):
     text = body(percentile)
     assert "Prezado(a) Prof(a). Maria das Gracas Taveira," in text
     assert "Plano Y" in text
+
+
+def test_every_draft_says_where_the_work_is_best_spent():
+    """A medical student writing to a lab is otherwise read as asking for bench time."""
+    for percentile in (7.0, 98.0):
+        text = body(percentile)
+        assert "sobretudo computacional" in text
+        assert "dois anos em ciência de dados" in text
