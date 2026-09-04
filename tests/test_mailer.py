@@ -194,3 +194,41 @@ def test_a_message_that_never_left_is_not_recorded_as_sent(config, campaign, sin
         send_campaign(config, campaign, "c1", confirm=True)
     status = campaign.scalar("SELECT status FROM campaign_messages WHERE siape='10'")
     assert status != "sent"
+
+
+def test_annexes_ride_along_and_are_verified_before_the_first_send(config, campaign, sink, tmp_path):
+    """A missing annex must stop the campaign, not appear on recipient 40 of 62."""
+    import json
+
+    from pulsar_research.outreach.mailer import campaign_attachments, send_campaign
+
+    annex = tmp_path / "relatorio.pdf"
+    annex.write_bytes(b"%PDF-1.7\nfake report\n%%EOF")
+    campaign.execute("UPDATE campaigns SET attachments_json=? WHERE campaign_id='c1'",
+                     [json.dumps([str(annex)])])
+
+    send_campaign(config, campaign, "c1", confirm=True)
+    msg = email.message_from_bytes(sink.messages[0])
+    parts = {p.get_filename() for p in msg.walk()}
+    assert "relatorio.pdf" in parts
+    attached = next(p for p in msg.walk() if p.get_filename() == "relatorio.pdf")
+    assert attached.get_payload(decode=True) == annex.read_bytes(), "the annex must arrive intact"
+    assert attached.get_content_type() == "application/pdf"
+
+    annex.unlink()
+    with pytest.raises(FileNotFoundError):
+        campaign_attachments(campaign, "c1")
+
+
+def test_an_oversized_annex_is_refused_rather_than_bounced(config, campaign, tmp_path, monkeypatch):
+    import json
+
+    from pulsar_research.outreach import mailer
+
+    big = tmp_path / "big.pdf"
+    big.write_bytes(b"0" * 2048)
+    campaign.execute("UPDATE campaigns SET attachments_json=? WHERE campaign_id='c1'",
+                     [json.dumps([str(big)])])
+    monkeypatch.setattr(mailer, "MAX_TOTAL_ATTACHMENT_BYTES", 1024)
+    with pytest.raises(ValueError, match="over the"):
+        mailer.campaign_attachments(campaign, "c1")
