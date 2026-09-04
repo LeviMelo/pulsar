@@ -80,14 +80,20 @@ semantic_profile: >-
 # Two canonical corrections from the ledger are load-bearing here and must not
 # drift back: the OBMEP result is an honourable mention, NOT a bronze medal; and
 # the PIC/HU result is an approved-but-unclassified proposal, NOT a scholarship.
+#
+# Coursework metrics are deliberately absent. IRA and entrance-exam score measure
+# how a student was graded, not what a researcher can do, and quoting them in a
+# message whose whole argument is demonstrated capability weakens it. Ordered by
+# what a reader should weigh first: standing research roles, then the technical
+# base, then formation.
 about_lines:
-  - "5º período de Medicina na FAMED/UFAL, IRA 8,4; ingresso pelo SiSU 2024.1 com 813,02 pontos. Formação técnica anterior em Eletroeletrônica pelo IFAL — Campus Arapiraca, e menção honrosa na OBMEP e na Olimpíada Alagoana de Matemática"
   - "pesquisador bolsista no Núcleo de Excelência em Tecnologias Sociais (NEES/UFAL), como especialista de domínio em sistemas de informação em saúde e no tratamento de bases públicas do SUS"
   - "projeto multicêntrico de reumatologia submetido ao PIC/HU Brasil sob orientação do Prof. Thiago Sotero Fragoso, com UFAL, UFMG, UFRGS e UNICAMP — derivação e validação de uma versão do SLE-DAS sem marcadores sorológicos. Respondo pela arquitetura do protocolo, pela harmonização dos dados entre os centros e pelo desenho estatístico da validação externa"
+  - "trabalho corrente em Python e R sobre bases administrativas de saúde — DATASUS, SINAN, SIM, SINASC, SIH/SIA, CNES, SNGPC/Anvisa, IBGE/SIDRA —, com pipelines reprodutíveis, congelamento de fontes e proveniência por SHA-256"
   - "direção científica do IFMSA-UFAL, onde conduzo a capacitação metodológica da equipe em revisão sistemática, metanálise e desenho de estudos; direção de pesquisa do projeto de extensão HEMOMAIS (UNIMA)"
   - "cofundador e diretor de iniciação científica da Liga Acadêmica de Cirurgia Cardiovascular da UFAL; integrante das ligas de Reumatologia, Neurologia e Neurocirurgia, Anestesiologia e Dor, Neurointensivismo e Clínica Médica"
   - "monitor de Bioquímica I (SOI 1) na graduação em Medicina do UNIMA/Afya, onde cursei Medicina antes da transferência para a UFAL"
-  - "trabalho corrente em Python e R sobre bases administrativas de saúde — DATASUS, SINAN, SIM, SINASC, SIH/SIA, CNES, SNGPC/Anvisa, IBGE/SIDRA —, com pipelines reprodutíveis, congelamento de fontes e proveniência por SHA-256"
+  - "formação técnica em Eletroeletrônica pelo IFAL — Campus Arapiraca, anterior à Medicina; menção honrosa na OBMEP e na Olimpíada Alagoana de Matemática"
 
 # WHAT I HAVE PRODUCED — artefacts, with their real status. A manuscript in
 # preparation is described as such; nothing here is upgraded into a publication.
