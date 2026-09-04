@@ -58,13 +58,18 @@ def create_campaign(
         "created_with": "pulsar",
     }
     now = utcnow()
+    # Measured BEFORE the write connection is opened: DuckDB takes a
+    # process-level write lock, so a read opened inside the transaction below
+    # fails, and these numbers go into the body of an email.
+    corpus_stats = _corpus_stats(db)
     with db.connect() as con:
         # One transaction: a campaign that exists with only half its recipients
         # is worse than no campaign, because the next step is sending it.
         con.execute("BEGIN TRANSACTION")
         try:
             _write_campaign(con, campaign_id, name, query, provenance, subject_template,
-                            body_template, theme, audience, signature, profile, now)
+                            body_template, theme, audience, signature, profile, now,
+                            corpus_stats=corpus_stats)
         except Exception:
             con.execute("ROLLBACK")
             raise
@@ -72,8 +77,43 @@ def create_campaign(
     return campaign_id, len(audience)
 
 
+def _corpus_stats(db: Database) -> dict[str, Any]:
+    """Facts about the analysis, measured now and frozen into the campaign.
+
+    The outreach discloses that it was produced by PULSAR and quotes the size of
+    the corpus behind it. Those numbers are read from the live store rather than
+    written into the template, so a later sync cannot turn a sentence in a sent
+    email into a false claim.
+    """
+    def count(sql: str) -> int:
+        return int(db.scalar(sql, default=0) or 0)
+
+    stats = {
+        "n_opportunities": count("SELECT COUNT(*) FROM opportunities"),
+        "n_projects": count("SELECT COUNT(DISTINCT COALESCE(NULLIF(project_code,''), project_title)) "
+                            "FROM opportunities"),
+        "n_professors": count("SELECT COUNT(*) FROM professors"),
+        "n_pages": count("SELECT COUNT(*) FROM sigaa_public_pages"),
+        "n_atoms": 0,
+        "channels": [],
+    }
+    stats["n_atoms"] = count(
+        "SELECT CAST(json_extract_string(stats_json, '$.atoms') AS BIGINT) FROM semantic_spaces "
+        "WHERE space_id = (SELECT value FROM meta WHERE key='current_semantic_space_id')")
+    # A swallowed error here once produced "0 planos de trabalho" inside a draft.
+    # An email that misstates the work behind it is worse than a failed build.
+    empty = [k for k, v in stats.items() if isinstance(v, int) and v <= 0]
+    if empty:
+        raise RuntimeError(
+            "refusing to build a campaign quoting empty corpus statistics: "
+            f"{', '.join(sorted(empty))} came back as zero. Run `pulsar semantics build` first."
+        )
+    return {"pulsar": stats}
+
+
 def _write_campaign(con, campaign_id, name, query, provenance, subject_template,
-                    body_template, theme, audience, signature, profile, now) -> None:
+                    body_template, theme, audience, signature, profile, now,
+                    corpus_stats=None) -> None:
     # Columns are named, not positional: a store migrated from v2 has the
     # widened outreach columns appended at the end, so VALUES(...) would
     # write the rationale into `selection_score`.
@@ -92,7 +132,8 @@ def _write_campaign(con, campaign_id, name, query, provenance, subject_template,
              recipient["email"], json_text(recipient["qualifying_opportunities"]),
              json_text(recipient["rationale"]), recipient["selection_score"], True, now])
         subject, body, body_html = render_message(
-            subject_template, body_template, recipient, signature, profile, theme=theme
+            subject_template, body_template, recipient, signature, profile,
+            theme=theme, extra=corpus_stats,
         )
         con.execute(
             "INSERT INTO campaign_messages (campaign_id, siape, subject, body_text, body_html, "
@@ -162,6 +203,10 @@ def update_message(
 ) -> None:
     """Edit one recipient's draft. Never touches any other recipient's message."""
     now = utcnow()
+    # Measured BEFORE the write connection is opened: DuckDB takes a
+    # process-level write lock, so a read opened inside the transaction below
+    # fails, and these numbers go into the body of an email.
+    corpus_stats = _corpus_stats(db)
     with db.connect() as con:
         sets: list[str] = []
         params: list[Any] = []

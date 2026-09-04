@@ -74,15 +74,19 @@ semantic_profile: >-
 # a professor actually reads. Keep each line short and specific: a capability
 # someone could ask you to demonstrate next week.
 capability_lines:
-  - "Python e R para análise, automação e trabalho reprodutível"
-  - "bases públicas do SUS — DATASUS, SINAN, SIH/SIA, SIM/SINASC — e dados do IBGE"
-  - "bioestatística, modelos de regressão, séries temporais e análise espacial"
-  - "revisão sistemática e metanálise, elaboração de protocolos e redação científica"
-  - "construção e curadoria de bases de dados, visualização e dashboards"
+  - "pesquisador no NEES/UFAL, como especialista de domínio em sistemas de informação em saúde e no tratamento de bases públicas do SUS"
+  - "projeto multicêntrico de reumatologia no PIC/HU Brasil, sob orientação do Prof. Thiago Sotero Fragoso — derivação e validação de uma versão do SLE-DAS sem marcadores sorológicos, na qual respondo pela harmonização dos dados entre os centros e pelo desenho estatístico da validação"
+  - "revisão metodológica de estudos ecológicos com dados do SINAN, incluindo análise de tendência temporal e autocorrelação espacial"
+  - "direção de pesquisa do IFMSA-UFAL, com capacitação da equipe em revisões sistemáticas e metanálises"
+  - "Python e R, automação de fluxos de pesquisa e processamento de grandes bases públicas — DATASUS, SIDRA, SINAN, SIH/SIA, SIM/SINASC e IBGE"
 
 # Sent verbatim to SIGAA when an application is explicitly confirmed.
 qualifications_text: |-
-  Sou acadêmico de Medicina da Universidade Federal de Alagoas (UFAL), com atuação em iniciação científica e pesquisa aplicada nas interfaces entre epidemiologia, ciência de dados, informática em saúde e pesquisa clínica. Possuo experiência com Python e R, automação de fluxos de pesquisa, bases públicas de saúde, análise estatística, revisão de literatura, elaboração de protocolos, construção e gerenciamento de bases de dados, visualização e interpretação de resultados e redação científica.
+  Sou acadêmico de Medicina da Universidade Federal de Alagoas (UFAL), com atuação em iniciação científica e pesquisa aplicada nas interfaces entre epidemiologia, ciência de dados, informática em saúde e pesquisa clínica. Atuo como pesquisador no Núcleo de Excelência em Tecnologias Sociais (NEES/UFAL), como especialista de domínio em sistemas de informação em saúde, com atuação na modelagem e no tratamento de dados provenientes das bases públicas do SUS. Exerço a direção de pesquisa do IFMSA-UFAL — onde conduzo a capacitação metodológica da equipe em revisões sistemáticas e metanálises —, do projeto de extensão HEMOMAIS (UNIMA) e da Liga Acadêmica de Cirurgia Cardiovascular da UFAL, da qual sou cofundador, além de integrar ligas de Reumatologia, Neurologia e Neurocirurgia, Anestesiologia, Neurointensivismo e Clínica Médica.
+
+  Tenho experiência na concepção e estruturação de projetos científicos, revisão de literatura, elaboração de protocolos, construção e gerenciamento de bases de dados, análise estatística, visualização e interpretação de resultados, redação científica e submissão de trabalhos. Como exemplo recente, participo de projeto multicêntrico de reumatologia (derivação e validação de uma versão do SLE-DAS sem marcadores sorológicos para aferição de atividade do lúpus eritematoso sistêmico), conduzido no PIC/HU Brasil sob orientação do Prof. Thiago Sotero Fragoso, no qual respondi pela harmonização dos dados dos centros participantes e pelo desenho estatístico da validação; também presto revisão metodológica a estudos ecológicos com dados do SINAN, envolvendo análise de tendência temporal e autocorrelação espacial.
+
+  Possuo domínio de Python e R e experiência com automação de fluxos de pesquisa, processamento de grandes bases públicas — especialmente DATASUS, SIDRA e demais fontes do SUS —, análises epidemiológicas e espaciais e desenvolvimento de ferramentas computacionais voltadas à pesquisa, incluindo a arquitetura de um motor próprio de integração e análise espaço-temporal de dados de saúde pública. Minha formação técnica prévia em Eletroeletrônica pelo IFAL e a participação em olimpíadas científicas (menção honrosa e medalha de bronze na OBMEP) complementam esse perfil com raciocínio quantitativo e resolução estruturada de problemas. Meus interesses concentram-se em reumatologia, neurologia, anestesiologia, medicina cardiovascular, epidemiologia e aplicações de ciência de dados e inteligência artificial à saúde. Considero como principais atributos para atividades de pesquisa a autonomia para aprender e implementar métodos novos, a capacidade de transitar entre problemas clínicos e quantitativos e a experiência em transformar questões de pesquisa em protocolos, análises e produtos científicos concretos.
 
 campaign_signature: |-
   Levi de Melo Amorim

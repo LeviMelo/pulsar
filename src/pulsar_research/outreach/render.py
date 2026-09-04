@@ -20,14 +20,24 @@ from ..semantics.normalize import display_person_name
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 
 
+def _milhar(value) -> str:
+    """15019 -> '15.019'. Brazilian thousands separator, for a Portuguese email."""
+    try:
+        return f"{int(value):,}".replace(",", ".")
+    except (TypeError, ValueError):
+        return str(value)
+
+
 def _environment(strict: bool = True) -> Environment:
-    return Environment(
+    env = Environment(
         undefined=StrictUndefined if strict else Undefined,
         autoescape=False,
         trim_blocks=True,
         lstrip_blocks=True,
         keep_trailing_newline=False,
     )
+    env.filters["milhar"] = _milhar
+    return env
 
 
 def read_template(name: str) -> str:
@@ -39,7 +49,8 @@ def read_template(name: str) -> str:
 STRONG_FIT_PERCENTILE = 70.0
 
 
-def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping[str, Any]) -> dict[str, Any]:
+def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping[str, Any],
+                  *, extra: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The variables a campaign template may use.
 
     `primary` is the single best-qualifying opportunity; templates that mention
@@ -66,6 +77,12 @@ def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping
         "capability_lines": list(profile.get("capability_lines") or []),
         "signature": signature,
         "sender_name": profile.get("sender_name") or (signature.splitlines() or [""])[0],
+        # Measured at campaign-creation time and frozen into the snapshot, so a
+        # message can never quote a corpus size the database no longer has.
+        # Declared here (not only injected) so a template guarding on it renders
+        # under StrictUndefined even when a caller supplies no statistics.
+        "pulsar": None,
+        **dict(extra or {}),
     }
 
 
@@ -106,9 +123,10 @@ def render_message(
     profile: Mapping[str, Any],
     *,
     theme: str = "default_email.html",
+    extra: Mapping[str, Any] | None = None,
 ) -> tuple[str, str, str]:
     """Returns ``(subject, plaintext, html)`` for one recipient."""
-    context = build_context(recipient, signature, profile)
+    context = build_context(recipient, signature, profile, extra=extra)
     subject, body = render_text(subject_template, body_template, context)
     body_html = render_html(body, {**context, "subject": subject}, theme=theme)
     return subject, body, body_html

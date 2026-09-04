@@ -18,7 +18,8 @@ PROFILE = {
     "campaign_signature": "Levi de Melo Amorim",
 }
 SIGNATURE = "Levi de Melo Amorim"
-AFFINITY = "dialoga de perto"
+# The gated claim: only a strong fit may tell a recipient where they ranked.
+AFFINITY = "ficou no percentil"
 
 
 def recipient(percentile: float, *, skills=("Séries temporais",), applied=True):
@@ -53,6 +54,14 @@ def test_a_strong_fit_may_state_the_alignment():
     assert "séries temporais" in body.lower()
 
 
+def test_every_draft_discloses_that_it_was_generated():
+    """The operator chose disclosure over concealment; it must not be droppable."""
+    for percentile in (7.0, 98.0):
+        body = render(percentile)
+        assert "PULSAR" in body
+        assert "redigida e enviada por um sistema" in body
+
+
 def test_a_weak_fit_never_states_an_alignment():
     body = render(7.0)
     assert AFFINITY not in body, "a p7 recipient must not be told the plan matches this student"
@@ -85,3 +94,27 @@ def test_context_never_invents_a_fit_when_the_ranking_produced_none():
 @pytest.mark.parametrize("percentile", [0.0, 50.0, 100.0])
 def test_the_ask_is_always_present(percentile):
     assert "ainda está disponível" in render(percentile)
+
+
+def test_the_declared_qualifications_never_name_the_restricted_counterpart():
+    """The NEES data-infrastructure work is disclosable; its counterpart is not.
+
+    This is a real confidentiality constraint on the operator, and the text is
+    sent verbatim to SIGAA and paraphrased into outreach, so it is pinned here
+    rather than left to whoever next edits the profile.
+    """
+    from pulsar_research.config import AppConfig
+
+    profile = AppConfig.load().load_profile()
+    surfaces = [profile.get("qualifications_text", ""), *profile.get("capability_lines", [])]
+    # Naming the counterpart is not the only way to expose the project: NEES plus
+    # "monitoring system" plus TabNet plus national scope reconstructs it for
+    # anyone who would recognise it. The operator-facing text describes his
+    # competence, not the engagement.
+    for restricted in ("Ministério da Saúde", "Ministerio da Saude", "DEMAS",
+                       "Grupo de Trabalho", "GT-MS", "TabNet",
+                       "especificação funcional", "alcance nacional", "monitoramento"):
+        for text in surfaces:
+            assert restricted not in text, f"{restricted!r} must not appear in operator-facing text"
+    assert "NEES" in profile["qualifications_text"], "the affiliation itself is not restricted"
+    assert "DATASUS" in profile["qualifications_text"], "nor is the subject matter"

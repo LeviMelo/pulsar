@@ -1,9 +1,15 @@
 Olá, {{ professor_name }},
 
-Meu nome é Levi de Melo Amorim, sou acadêmico de Medicina da FAMED/UFAL e {% if already_applied %}me inscrevi{% else %}tenho interesse{% endif %} no plano de trabalho “{{ primary.plan_title or primary.project_title }}”{% if primary.project_title and primary.plan_title and primary.project_title != primary.plan_title %}, do projeto “{{ primary.project_title }}”{% endif %}{% if primary.edital %} ({{ primary.edital }}){% endif %}. Escrevo para me apresentar diretamente, já que a inscrição pelo sistema diz muito pouco sobre quem se candidatou.
+Meu nome é Levi de Melo Amorim, sou acadêmico de Medicina da FAMED/UFAL e {% if already_applied %}me inscrevi{% else %}tenho interesse{% endif %} no plano de trabalho “{{ primary.plan_title or primary.project_title }}”{% if primary.project_title and primary.plan_title and primary.project_title != primary.plan_title %}, do projeto “{{ primary.project_title }}”{% endif %}{% if primary.edital %} ({{ primary.edital }}){% endif %}.
+
+Sendo direto quanto à natureza desta mensagem: ela foi redigida e enviada por um sistema que eu mesmo desenvolvi, o PULSAR. Digo isso por duas razões. A primeira é honestidade — candidatei-me a vários planos deste edital, e seria falso sugerir que cada mensagem foi escrita individualmente à mão. A segunda é que o próprio sistema é a demonstração mais concreta que eu tenho do que sei fazer.
+{% if pulsar %}
+
+O PULSAR indexa o edital e o currículo público dos orientadores: {{ pulsar.n_opportunities|milhar }} planos de trabalho, {{ pulsar.n_projects|milhar }} projetos e {{ pulsar.n_professors|milhar }} docentes, decompostos em {{ pulsar.n_atoms|milhar }} registros acadêmicos individuais — projetos, artigos, orientações e linhas de pesquisa extraídos do SIGAA público e do Lattes, a partir de {{ pulsar.n_pages|milhar }} páginas arquivadas. Sobre esse acervo ele constrói uma representação semântica própria (TF-IDF lexical, um modelo distribucional SPPMI+SVD treinado no próprio corpus e embeddings neurais executados localmente, na minha máquina) e ordena as oportunidades por afinidade com o meu perfil. Cada colocação é auditável: o sistema registra qual trecho de qual documento sustentou a pontuação, e a qualidade do ranqueamento é medida contra uma bateria de sete tarefas de recuperação construídas a partir do próprio edital.
+{% endif %}
 {% if fit_is_strong %}
 
-O plano dialoga de perto com o que venho desenvolvendo{% if matched_skills %}, em particular {{ matched_skills[:3]|join(', ')|lower }}{% endif %}.
+Neste caso o seu plano ficou no percentil {{ opportunity_percentile|round|int }} entre os {{ pulsar.n_opportunities|milhar if pulsar else 'demais' }} planos avaliados{% if matched_skills %}, sobretudo pela proximidade com {{ matched_skills[:3]|join(', ')|lower }}{% endif %} — é a razão de eu escrever a respeito dele com mais atenção.
 {% endif %}
 {% if capability_lines %}
 
@@ -14,7 +20,7 @@ Em termos práticos, o que eu poderia assumir desde o início:
 {% endfor %}
 {% endif %}
 
-Gostaria de saber se {% if primary.funded_slots %}a vaga com bolsa deste plano ainda está disponível{% else %}ainda há vaga disponível neste plano{% endif %} e se seria oportuno conversarmos brevemente. Se preferir, envio antes o currículo Lattes e um resumo do que já produzi, para que avalie sem compromisso.
+Gostaria de saber se {% if primary.funded_slots %}a vaga com bolsa deste plano ainda está disponível{% else %}ainda há vaga disponível neste plano{% endif %} e se seria oportuno conversarmos brevemente. Se preferir, envio antes o currículo Lattes e o código do PULSAR, para que avalie sem compromisso.
 
 Agradeço a atenção e o tempo.
 
