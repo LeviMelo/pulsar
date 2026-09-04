@@ -58,7 +58,10 @@ STRONG_FIT_PERCENTILE = 70.0
 # How many tailored items a message may carry. Past this the offer stops reading
 # as an offer and starts reading as a catalogue.
 MAX_CONTRIBUTIONS = 3
-MAX_WORKS = 2
+# Shared skills required before an annex may be called the closest match. One is
+# enough because the tag lists are curated to be distinctive; what actually
+# prevents a spurious match is that no annex is tagged with a broad method.
+MIN_EMPHASIS_OVERLAP = 1
 
 
 def _plan_skill_ids(primary: Mapping[str, Any]) -> list[str]:
@@ -70,24 +73,27 @@ def _plan_skill_ids(primary: Mapping[str, Any]) -> list[str]:
 def select_contributions(primary: Mapping[str, Any], profile: Mapping[str, Any]) -> list[str]:
     """What to offer, chosen by what this plan actually asks for.
 
-    Several skills map deliberately to the same sentence — `datasus`, `sinan`,
-    `sih_sia` and `sim_sinasc` all mean "I would handle the SUS extraction" — so
-    the result is deduplicated while keeping first-seen order.
+    Deduplication is by key, not by sentence. Several skills map deliberately to
+    the same key — `datasus`, `sinan`, `sih_sia` and `sim_sinasc` all mean "I
+    would handle the SUS extraction" — and, more importantly, a default can name
+    the same work as a skill-matched line in different words, which once put
+    "conduzir a análise estatística" in a message twice.
     """
-    mapping = profile.get("contribution_by_skill") or {}
-    chosen: list[str] = []
+    by_skill = profile.get("contribution_by_skill") or {}
+    texts = profile.get("contribution_texts") or {}
+    keys: list[str] = []
     for skill_id in _plan_skill_ids(primary):
-        line = mapping.get(skill_id)
-        if line and line not in chosen:
-            chosen.append(line)
-        if len(chosen) == MAX_CONTRIBUTIONS:
-            return chosen
-    for line in profile.get("contribution_default") or []:
-        if line not in chosen:
-            chosen.append(line)
-        if len(chosen) == MAX_CONTRIBUTIONS:
+        key = by_skill.get(skill_id)
+        if key and key not in keys:
+            keys.append(key)
+        if len(keys) == MAX_CONTRIBUTIONS:
             break
-    return chosen
+    for key in profile.get("contribution_default") or []:
+        if len(keys) == MAX_CONTRIBUTIONS:
+            break
+        if key not in keys:
+            keys.append(key)
+    return [texts[k] for k in keys if k in texts]
 
 
 def select_annexes(primary: Mapping[str, Any], profile: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -104,6 +110,11 @@ def select_annexes(primary: Mapping[str, Any], profile: Mapping[str, Any]) -> li
     annexes = [dict(a) for a in (profile.get("annexes") or []) if isinstance(a, Mapping)]
     scores = [len(plan_skills & set(a.get("tags") or [])) for a in annexes]
     best = max(scores, default=0)
+    # One shared skill is a coincidence, not a match: pointing at a
+    # leptospirosis paper because a plant-physiology plan also mentions
+    # statistics reads as a system that did not read either.
+    if best < MIN_EMPHASIS_OVERLAP:
+        best = 0
     winners = [i for i, score in enumerate(scores) if score == best]
     for index, annex in enumerate(annexes):
         annex["emphasised"] = bool(best) and len(winners) == 1 and index == winners[0]
@@ -171,7 +182,9 @@ def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping
         "sending_note": profile.get("sending_note") or "",
         "expertise_note": profile.get("expertise_note") or "",
         # One line, and only where a rank may be stated at all.
-        "rank_scale": rank_scale(rank, int((pulsar or {}).get("n_opportunities") or 0))
+        # Carries its own blank line: leaving the spacing to a Jinja {% if %}
+        # made the paragraph break disappear whenever the scale was absent.
+        "rank_block": ("\n\n" + rank_scale(rank, int((pulsar or {}).get("n_opportunities") or 0)))
                       if fit_is_strong else "",
         "fit_bars": fit_bars(rationale.get("reading")) if fit_is_strong else [],
         "links": list(profile.get("links") or []),

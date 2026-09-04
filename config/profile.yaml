@@ -95,9 +95,9 @@ identity_line: >-
 # formal appointment — so it is phrased as work done rather than a post held.
 expertise_note: >-
   O meu trabalho é sobretudo computacional: são dois anos em ciência de dados,
-  epidemiologia e computação científica. Rendo mais em projetos que envolvam
-  dados — aquisição, tratamento, modelagem, análise e a redação que sai daí — e,
-  de modo geral, no que se resolve no computador.
+  epidemiologia e computação científica. Rendo mais em projetos que envolvam dados
+  ou trabalho de computador — aquisição, tratamento, modelagem, análise e a redação
+  que sai daí.
 
 # Reserve, not a script. Nothing here is emitted unless it is selected against
 # the recipient's own plan; the SIGAA qualifications field already carries the
@@ -110,37 +110,49 @@ about_lines:
   - "monitor de Bioquímica I na graduação em Medicina do UNIMA/Afya"
   - "formação técnica em Eletroeletrônica pelo IFAL — Campus Arapiraca; menção honrosa na OBMEP e na Olimpíada Alagoana de Matemática"
 
-# WHAT I WOULD DO. Selected against the skills extracted from the recipient's own
-# plan, so the offer is about their project rather than about my CV. At most
-# three; `contribution_default` covers a plan whose extracted skills match none.
-contribution_by_skill:
-  biostatistics: "conduzir a análise estatística, do desenho ao ajuste dos modelos e à checagem de pressupostos"
-  regression: "conduzir a análise estatística, do desenho ao ajuste dos modelos e à checagem de pressupostos"
-  time_series: "montar a análise de tendência temporal, incluindo correção de autocorrelação serial"
-  spatial_stats: "montar a análise espacial — autocorrelação, varredura de clusters e os mapas do artigo"
-  geoprocessing: "montar a análise espacial — autocorrelação, varredura de clusters e os mapas do artigo"
-  datasus: "automatizar a extração e o tratamento das bases do SUS, com congelamento das fontes e proveniência por SHA-256"
-  sinan: "automatizar a extração e o tratamento das bases do SUS, com congelamento das fontes e proveniência por SHA-256"
-  sih_sia: "automatizar a extração e o tratamento das bases do SUS, com congelamento das fontes e proveniência por SHA-256"
-  sim_sinasc: "automatizar a extração e o tratamento das bases do SUS, com congelamento das fontes e proveniência por SHA-256"
-  ibge: "levantar e normalizar os denominadores populacionais e a malha geográfica do estudo"
-  systematic_review: "estruturar a revisão sistemática: estratégia de busca documentada, triagem em duplicata e extração"
-  meta_analysis: "conduzir a metanálise, incluindo heterogeneidade, análise de subgrupos e viés de publicação"
-  literature_db: "estruturar e documentar a estratégia de busca na literatura"
-  epi_design: "operacionalizar o desenho do estudo: desfechos, critérios de elegibilidade e plano de análise por escrito"
-  machine_learning: "implementar e validar os modelos, com avaliação fora da amostra e não apenas métricas de treino"
-  python: "construir e curar a base do projeto, da integração das fontes ao controle de qualidade, em Python ou R"
-  r_lang: "construir e curar a base do projeto, da integração das fontes ao controle de qualidade, em Python ou R"
-  sql: "modelar e consultar a base do estudo, mantendo o pipeline reprodutível"
-  data_management: "construir e curar a base do projeto, da integração das fontes ao controle de qualidade"
-  web_dev: "desenvolver a interface ou o painel de exploração dos resultados"
-contribution_default:
-  - "construir e curar a base de dados do projeto, da integração das fontes ao controle de qualidade"
-  - "conduzir a análise estatística de forma reprodutível, em Python ou R"
-  - "preparar figuras, tabelas e o texto para submissão"
+# WHAT I WOULD DO. Skills map to a contribution *key*, not to a sentence, and
+# the keys are what gets deduplicated. Mapping straight to text let a default
+# ("conduzir a análise estatística de forma reprodutível") be appended next to a
+# near-identical skill-matched line, because the two strings differed. At most
+# three keys survive; `contribution_default` fills a plan whose skills match none
+# and is filtered against whatever was already chosen.
+contribution_texts:
+  stats: "conduzir a análise estatística, do desenho ao ajuste dos modelos e à checagem de pressupostos"
+  temporal: "montar a análise de tendência temporal, incluindo correção de autocorrelação serial"
+  spatial: "montar a análise espacial — autocorrelação, varredura de clusters e os mapas do artigo"
+  sus: "automatizar a extração e o tratamento das bases do SUS, com congelamento das fontes e proveniência por SHA-256"
+  denominators: "levantar e normalizar os denominadores populacionais e a malha geográfica do estudo"
+  review: "estruturar a revisão sistemática: estratégia de busca documentada, triagem em duplicata e extração"
+  meta: "conduzir a metanálise, incluindo heterogeneidade, análise de subgrupos e viés de publicação"
+  design: "operacionalizar o desenho do estudo: desfechos, critérios de elegibilidade e plano de análise por escrito"
+  ml: "implementar e validar os modelos, com avaliação fora da amostra e não apenas métricas de treino"
+  database: "construir e curar a base de dados do projeto, da integração das fontes ao controle de qualidade"
+  frontend: "desenvolver a interface ou o painel de exploração dos resultados"
+  writing: "preparar as figuras, as tabelas e o texto para submissão"
 
-# Named in the closing line and in the footer card; must match what
-# `campaign create --attach` actually attaches.
+contribution_by_skill:
+  biostatistics: stats
+  regression: stats
+  time_series: temporal
+  spatial_stats: spatial
+  geoprocessing: spatial
+  datasus: sus
+  sinan: sus
+  sih_sia: sus
+  sim_sinasc: sus
+  ibge: denominators
+  systematic_review: review
+  literature_db: review
+  meta_analysis: meta
+  epi_design: design
+  machine_learning: ml
+  python: database
+  r_lang: database
+  sql: database
+  data_management: database
+  web_dev: frontend
+contribution_default: [database, stats, writing]
+
 # WHAT IS ATTACHED. One list, because the annexes ARE the recent work: keeping a
 # separate "recent output" list only invited the two to disagree about what the
 # professor would actually find in the message.
@@ -149,28 +161,35 @@ contribution_default:
 # closest to the recipient's plan; an annex the plan has nothing to do with is
 # still worth offering, and hiding it made a productive week look like one paper.
 #
+# Tags list what makes a document DISTINCTIVE, not everything it contains. All
+# four use biostatistics, regression and epidemiological design, so listing those
+# matched a plant-physiology plan against the leptospirosis paper on the strength
+# of the word "bioestatística" alone. Broad methods belong in
+# `contribution_by_skill`, which is about what the student can do; tags exist to
+# tell two of his own papers apart.
+#
 # `recent` is true where the document's own printed date falls in the current
-# week. It is what licenses "três deles desta semana", and every one of those
-# dates is checkable inside the PDF, so it must be maintained honestly:
+# week. It is what licenses "3 deles escritos nesta semana", and every one of
+# those dates is checkable inside the PDF, so it must be maintained honestly:
 #   relatório PULSAR 04/09 · GLP-1 nacional 02/09 · GLP-1 municipal 01/09
 #   leptospirose 14/08 — older, and therefore flagged false.
 annexes:
   - key: lepto
     label: "Leptospirose no Brasil, 2007–2025 — estudo ecológico de séries temporais por região de saúde/ano, com modelagem binomial hierárquica e estrutura espacial"
     recent: false
-    tags: [datasus, sinan, epi_design, time_series, spatial_stats, biostatistics, regression, geoprocessing]
+    tags: [sinan, time_series, spatial_stats, geoprocessing]
   - key: glp1_nacional
     label: "Agonistas de GLP-1 no SNGPC/Anvisa — farmacoepidemiologia nacional, por UF e região"
     recent: true
-    tags: [datasus, epi_design, data_management, python, sql, ibge]
+    tags: [datasus, python, sql]
   - key: glp1_municipal
     label: "Agonistas de GLP-1 no SNGPC/Anvisa — o mesmo desenho com resolução municipal, sobre as 5.571 unidades, com integração multibase e modelagem espacial"
     recent: true
-    tags: [datasus, epi_design, spatial_stats, geoprocessing, data_management, ibge]
+    tags: [ibge, spatial_stats, geoprocessing]
   - key: pulsar
     label: "Relatório técnico do PULSAR — construção do corpus, estrutura temática e a avaliação de recuperação resumida no rodapé"
     recent: true
-    tags: [machine_learning, web_dev, data_management, literature_db]
+    tags: [machine_learning, web_dev, literature_db]
 
 # WHERE TO REPLY. The institutional account cannot issue an app password, so the
 # message is submitted from a personal address and the From line says so. Reply-To

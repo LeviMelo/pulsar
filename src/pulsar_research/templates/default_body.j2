@@ -1,15 +1,10 @@
 Prezado(a) Prof(a). {{ professor_name }},
 
-Sou Levi de Melo Amorim, {{ identity_line }}. Registrei interesse no plano “{{ primary.plan_title or primary.project_title }}”{% if primary.project_title and primary.plan_title and primary.project_title != primary.plan_title %}, do projeto “{{ primary.project_title }}”{% endif %}{% if primary.edital %} ({{ primary.edital }}){% endif %}{% if already_applied %} — a inscrição que o SIGAA notificou há alguns dias. Esta mensagem é a continuação dela{% endif %}.
+Sou Levi de Melo Amorim, {{ identity_line }}. Registrei interesse no plano “{{ primary.plan_title or primary.project_title }}”{% if primary.project_title and primary.plan_title and primary.project_title != primary.plan_title %}, do projeto “{{ primary.project_title }}”{% endif %}{% if primary.edital %} ({{ primary.edital }}){% endif %}{% if already_applied %} — a inscrição que o SIGAA notificou há alguns dias{% endif %}.
 
-Cheguei até ele pelo PULSAR, um sistema que construí para organizar a minha própria candidatura: ele indexou os {{ pulsar.n_opportunities|milhar if pulsar else '' }} planos deste edital junto com a produção pública dos orientadores e os ordenou por afinidade com o que eu sei fazer.{% if fit_is_strong %} O seu ficou em {{ opportunity_rank }}º{% if matched_skills %}, sobretudo por {{ matched_skills[:2]|join(' e ')|lower }}{% endif %}.{% elif matched_skills %} O seu plano pede {{ matched_skills[:2]|join(' e ')|lower }}, que é trabalho que eu já faço.{% endif %}
-{% if rank_scale %}
+Cheguei até ele pelo PULSAR, um sistema que construí para organizar a minha própria candidatura: ele indexou os {{ pulsar.n_opportunities|milhar if pulsar else '' }} planos deste edital junto com a produção pública dos orientadores e os ordenou por afinidade com o que eu sei fazer.{% if fit_is_strong %} O seu ficou em {{ opportunity_rank }}º{% if matched_skills %}, sobretudo por {{ matched_skills[:2]|join(' e ')|lower }}{% endif %}.{% elif matched_skills %} O seu plano pede {{ matched_skills[:2]|join(' e ')|lower }}, que é trabalho que eu já faço.{% endif %}{{ rank_block }}
 
-
-{{ rank_scale }}
-{% endif %}
-
-O registro partiu do sistema, em todos os planos compatíveis, e por isso chegou antes de qualquer conversa — é o que estou corrigindo agora. O interesse eu assumo: só não formalizei a indicação no SIGAA porque o vínculo é único, e prefiro acertar isso conversando. E ele não depende de bolsa — se houver espaço para trabalhar junto em outra frente, também me interessa.
+O registro saiu do sistema em todos os planos compatíveis, antes de eu escrever a qualquer orientador. Escrevo agora porque só posso confirmar um vínculo e prefiro combinar isso antes de usá-lo. Com bolsa ou sem, se houver frente aqui em que eu seja útil, tenho interesse.
 {% if expertise_note %}
 
 {{ expertise_note }}
@@ -24,17 +19,16 @@ No seu plano especificamente, eu poderia assumir:
 {% endif %}
 {% if annexes %}
 
-Anexei {{ annexes|length }} documentos{% if annex_recent_count %}, {{ annex_recent_count }} deles escritos nesta semana{% endif %} — são rascunhos avançados, não publicações. Ficam à disposição caso queira ver como eu trabalho:
+Anexei {{ annexes|length }} documentos{% if annex_recent_count %}, {{ annex_recent_count }} deles escritos nesta semana{% endif %}. São rascunhos avançados, não publicações:
 
 {% for a in annexes %}
 - {{ a.label }}{{ "  ← o mais próximo do seu plano" if a.emphasised else "" }}
 {% endfor %}
 {% endif %}
 
+A bolsa que consta no edital ainda está livre? O que está publicado nem sempre acompanha o que já foi combinado, e como só posso confirmar um vínculo, preciso saber antes de o prazo fechar.
 
-A bolsa que consta no edital ainda está livre? Pergunto porque o que está publicado nem sempre acompanha o que já foi combinado, e porque só posso formalizar um vínculo — preciso saber onde ele faz sentido antes de o prazo fechar.
-
-Sobre a mensagem em si: partes dela são montadas pelo próprio PULSAR a partir do texto do plano — a lista acima e a escolha do anexo em destaque, por exemplo. O encaixe nem sempre sai bom, e se alguma coisa aqui soar deslocada em relação ao que o plano realmente pede, é limitação do sistema e não falta de leitura da minha parte.
+A lista acima e o destaque no anexo são gerados pelo PULSAR a partir do texto do plano. Nem sempre acertam: se algo soar deslocado em relação ao que o plano realmente pede, é limitação do sistema, não desatenção minha.
 
 {{ signature }}
 {% for c in contacts %}

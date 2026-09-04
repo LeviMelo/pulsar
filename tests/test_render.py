@@ -19,14 +19,20 @@ from pulsar_research.outreach.render import (MAX_CONTRIBUTIONS, STRONG_FIT_PERCE
 
 PROFILE = {
     "identity_line": "estudante do 5º período de Medicina na FAMED/UFAL",
-    "contribution_by_skill": {
-        "time_series": "montar a análise de tendência temporal",
-        "datasus": "automatizar a extração das bases do SUS",
-        "sinan": "automatizar a extração das bases do SUS",   # same sentence, on purpose
-        "meta_analysis": "conduzir a metanálise",
+    "contribution_texts": {
+        "temporal": "montar a análise de tendência temporal",
+        "sus": "automatizar a extração das bases do SUS",
+        "meta": "conduzir a metanálise",
+        "database": "construir e curar a base de dados",
+        "stats": "conduzir a análise estatística",
     },
-    "contribution_default": ["construir e curar a base de dados",
-                             "conduzir a análise estatística"],
+    "contribution_by_skill": {
+        "time_series": "temporal",
+        "datasus": "sus", "sinan": "sus",       # one key, deliberately shared
+        "meta_analysis": "meta",
+        "biostatistics": "stats",
+    },
+    "contribution_default": ["database", "stats"],
     "annexes": [
         {"key": "lepto", "label": "Leptospirose 2007–2025", "recent": False,
          "tags": ["time_series", "sinan"]},
@@ -116,9 +122,9 @@ def test_every_draft_separates_registration_from_indication():
         text = body(percentile)
         # The registration is owned, not disclaimed: telling a professor it is
         # "no commitment" is both discourteous and, by now, untrue.
-        assert "O interesse eu assumo" in text
-        assert "só não formalizei a indicação no SIGAA" in text
-        assert "não depende de bolsa" in text, "the offer is not conditioned on funding"
+        assert "antes de eu escrever a qualquer orientador" in text
+        assert "só posso confirmar um vínculo e prefiro combinar isso antes" in text
+        assert "Com bolsa ou sem" in text, "the offer is not conditioned on funding"
         assert "não é indicação nem compromisso" not in text
 
 
@@ -126,7 +132,7 @@ def test_the_scholarship_question_is_asked_plainly_in_every_draft():
     for percentile in (0.0, 50.0, 100.0):
         text = body(percentile)
         assert "A bolsa que consta no edital ainda está livre?" in text
-        assert "só posso formalizar um vínculo" in text
+        assert "só posso confirmar um vínculo" in text
 
 
 def test_the_offer_is_built_from_the_plan_not_from_a_fixed_list():
@@ -140,7 +146,32 @@ def test_the_offer_is_built_from_the_plan_not_from_a_fixed_list():
 
 
 def test_a_plan_matching_nothing_still_gets_a_usable_offer():
-    assert select_contributions({"skills": []}, PROFILE) == PROFILE["contribution_default"]
+    assert select_contributions({"skills": []}, PROFILE) ==         [PROFILE["contribution_texts"][k] for k in PROFILE["contribution_default"]]
+
+
+def test_a_default_never_repeats_work_a_matched_skill_already_named():
+    """Deduplication is by key: two keys can name the same work in other words."""
+    chosen = select_contributions(
+        {"skills": [{"skill_id": "biostatistics", "generic": False}]}, PROFILE)
+    assert chosen.count("conduzir a análise estatística") == 1
+    assert len(chosen) == len(set(chosen))
+
+
+BROAD_METHODS = {"biostatistics", "regression", "epi_design", "data_management"}
+
+
+def test_no_annex_is_tagged_with_a_method_all_of_them_share():
+    """What stops a spurious "closest match" is curation, not a threshold.
+
+    Every one of these documents uses biostatistics and epidemiological design.
+    Tagging them so matched a plant-physiology plan against the leptospirosis
+    paper because both mention statistics.
+    """
+    from pulsar_research.config import AppConfig
+
+    for annex in AppConfig.load().load_profile()["annexes"]:
+        shared = BROAD_METHODS & set(annex["tags"])
+        assert not shared, f"{annex['key']} is tagged with the non-distinctive {shared}"
 
 
 def test_the_offer_never_becomes_a_catalogue():
@@ -226,3 +257,34 @@ def test_every_draft_says_where_the_work_is_best_spent():
         text = body(percentile)
         assert "sobretudo computacional" in text
         assert "dois anos em ciência de dados" in text
+
+
+# Phrasings that kept reappearing while this template was being written: the
+# letter narrating itself, or explaining its own construction, instead of just
+# saying the thing. Each one was written, read back as synthetic, and removed.
+SELF_NARRATION = [
+    "Esta mensagem é a continuação",
+    "Sobre a mensagem em si",
+    "A pergunta prática",
+    "Uma pergunta objetiva",
+    "Pergunto porque",
+    "Uma ressalva",
+    "De forma mais ampla",
+    "Vale dizer",
+    "é o que estou corrigindo agora",
+    "O interesse eu assumo",
+    "caso queira ver como eu trabalho",
+]
+
+
+@pytest.mark.parametrize("percentile", [7.0, 98.0])
+def test_the_letter_never_narrates_itself(percentile):
+    """The prose must read as written to the professor, not about the writing.
+
+    Explaining why a question is being asked, announcing what the message is, or
+    reassuring the reader about the writer's intentions all read as machine
+    output even when every individual sentence is fine.
+    """
+    text = body(percentile)
+    for tic in SELF_NARRATION:
+        assert tic not in text, f"{tic!r} is the letter talking about itself"
