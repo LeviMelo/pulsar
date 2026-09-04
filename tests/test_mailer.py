@@ -232,3 +232,24 @@ def test_an_oversized_annex_is_refused_rather_than_bounced(config, campaign, tmp
     monkeypatch.setattr(mailer, "MAX_TOTAL_ATTACHMENT_BYTES", 1024)
     with pytest.raises(ValueError, match="over the"):
         mailer.campaign_attachments(campaign, "c1")
+
+
+def test_doctor_style_verification_authenticates_instead_of_checking_for_a_string(config, sink):
+    """A set-but-wrong password must read as not ready, not as ready."""
+    from pulsar_research.outreach.mailer import SMTPProvider
+
+    ok, detail = SMTPProvider(config).verify_credentials()
+    assert ok and "no credentials set" in detail, "the sink needs no credentials"
+
+    config.raw["smtp"]["host"] = "127.0.0.1"
+    config.raw["smtp"]["port"] = 1  # nothing listens here
+    ok, detail = SMTPProvider(config).verify_credentials()
+    assert not ok and "could not reach" in detail
+
+
+def test_an_unconfigured_relay_is_reported_rather_than_assumed_working(config):
+    from pulsar_research.outreach.mailer import SMTPProvider
+
+    config.raw["smtp"]["host"] = ""
+    ok, detail = SMTPProvider(config).verify_credentials()
+    assert not ok and "not configured" in detail

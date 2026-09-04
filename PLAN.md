@@ -1073,6 +1073,23 @@ SHA-256 of every received part against the source PDFs. All 62 messages carried
 all four annexes intact. It runs on the copy because `send_campaign` marks rows
 sent, and the real campaign must stay in `draft`.
 
+**D28 — "Configured" was never evidence of "works", and doctor said it was.**
+`_smtp_summary` reported `ready` whenever four strings were non-empty. All four
+were, doctor said ready, and the relay rejected the login on the first message —
+which on the real run would have been discovered mid-campaign. It now calls
+`SMTPProvider.verify_credentials()`, which opens a real session, negotiates
+STARTTLS and authenticates, sending nothing. The no-credentials path still
+connects, because host resolution and STARTTLS are most of what fails. Google
+rejecting an account password is the common case and is invisible in the error
+text, so the failure names it: the stored secret was 19 characters where an App
+Password is 16.
+
+**D29 — Outreach prose is written in the register of the sender.**
+A closing that explained at length that a refusal would not offend read as
+pleading rather than as a colleague asking a question. The ask is now two
+sentences: what the edital says, and whether it still holds. The test pins the
+absence of the earlier phrasing, not only the presence of the new.
+
 ---
 
 ## 23. Final note to the next agent

@@ -100,6 +100,40 @@ class SMTPProvider:
                 pass
             self._server = None
 
+    def verify_credentials(self) -> tuple[bool, str]:
+        """Open a real session and authenticate, sending nothing.
+
+        Checking that the environment variables are *set* proved worthless: the
+        variables were set, `doctor` reported ready, and the relay rejected the
+        login on the first message. The only check worth having is the one the
+        provider itself performs.
+        """
+        if not self.is_configured():
+            return False, "host or from_address not configured"
+        try:
+            # Entered even with no credentials: that still proves the host
+            # resolves, the port answers and STARTTLS negotiates, which is most
+            # of what goes wrong. `__enter__` skips the login when user is empty.
+            with self:
+                if not self.user:
+                    return True, "connected; no credentials set, relay must allow anonymous relay"
+                return True, f"login accepted for {self.user}"
+        except smtplib.SMTPAuthenticationError as exc:
+            detail = exc.smtp_error.decode("utf-8", "replace") if exc.smtp_error else str(exc)
+            hint = ""
+            # The overwhelmingly common cause, and invisible from the error text:
+            # Google rejects account passwords for SMTP and wants a 16-character
+            # App Password, which in turn requires 2-Step Verification.
+            if "gmail" in self.host or "google" in self.host:
+                length = len(self.password.replace(" ", ""))
+                if length != 16:
+                    hint = (f" — the password is {length} characters; Google requires a "
+                            "16-character App Password (myaccount.google.com/apppasswords), "
+                            "not the account password")
+            return False, f"rejected by {self.host}: {detail.splitlines()[0]}{hint}"
+        except Exception as exc:
+            return False, f"could not reach {self.host}:{self.port}: {exc}"
+
     def send(self, message: OutgoingMessage) -> str:
         if self._server is None:
             raise RuntimeError("SMTP session is not open")

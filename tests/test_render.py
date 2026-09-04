@@ -102,8 +102,8 @@ def test_context_never_invents_a_fit_when_the_ranking_produced_none():
 
 @pytest.mark.parametrize("percentile", [0.0, 50.0, 100.0])
 def test_the_ask_is_always_present(percentile):
-    assert "a vaga ainda está aberta?" in render(percentile)
-    assert "ainda há vaga aberta aqui" in render(percentile, funded=0)
+    assert "permanece disponível" in render(percentile)
+    assert "com ou sem bolsa" in render(percentile, funded=0)
 
 
 def test_a_funded_slot_is_reported_as_the_edital_says_it_not_as_fact():
@@ -113,11 +113,12 @@ def test_a_funded_slot_is_reported_as_the_edital_says_it_not_as_fact():
     the flag as ground truth asks a question the recipient has to correct.
     """
     body = render(90.0, funded=1)
-    assert "porque é o que consta no edital" in body
-    assert "já esteja combinada com um aluno" in body
-    assert "o sistema não tem como enxergar isso" in body
-    # And the recipient is given a cost-free way to say no.
-    assert "não insisto" in body
+    assert "O edital indica vaga com bolsa" in body
+    assert "nem sempre acompanha o que já foi combinado" in body
+    # Stated once, in the register of the rest of the message. An earlier draft
+    # explained at length that a refusal would not offend, which reads as
+    # pleading rather than as a colleague asking a question.
+    assert "não me constrange" not in body and "não insisto" not in body
 
 
 def test_the_declared_qualifications_never_name_the_restricted_counterpart():

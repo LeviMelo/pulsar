@@ -85,7 +85,16 @@ def _smtp_summary(config: AppConfig) -> str:
     ) if not present]
     if missing:
         return f"[yellow]not ready — missing {', '.join(missing)}[/yellow]"
-    return f"[green]ready[/green] {sender} via {host}:{smtp.get('port', 587)}"
+    # Present is not the same as accepted. Reporting "ready" on the strength of
+    # four non-empty strings once sent an operator into a 62-message campaign
+    # with a password the relay refuses, so doctor now authenticates for real.
+    from .outreach.mailer import SMTPProvider
+
+    ok, detail = SMTPProvider(config).verify_credentials()
+    where = f"{sender} via {host}:{smtp.get('port', 587)}"
+    if not ok:
+        return f"[red]NOT ready[/red] {where} — {detail}"
+    return f"[green]ready[/green] {where} — {detail}"
 
 
 def _sync(db: Database, source: str, operation):
