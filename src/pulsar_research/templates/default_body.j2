@@ -5,11 +5,11 @@ Meu nome é Levi de Melo Amorim, sou acadêmico de Medicina da FAMED/UFAL e {% i
 Sendo direto quanto à natureza desta mensagem: ela foi redigida e enviada por um sistema que eu mesmo desenvolvi, o PULSAR. Digo isso por duas razões. A primeira é honestidade — candidatei-me a vários planos deste edital, e seria falso sugerir que cada mensagem foi escrita individualmente à mão. A segunda é que o próprio sistema é a demonstração mais concreta que eu tenho do que sei fazer.
 {% if pulsar %}
 
-O PULSAR indexa o edital e o currículo público dos orientadores: {{ pulsar.n_opportunities|milhar }} planos de trabalho, {{ pulsar.n_projects|milhar }} projetos e {{ pulsar.n_professors|milhar }} docentes, decompostos em {{ pulsar.n_atoms|milhar }} registros acadêmicos individuais — projetos, artigos, orientações e linhas de pesquisa extraídos do SIGAA público e do Lattes, a partir de {{ pulsar.n_pages|milhar }} páginas arquivadas. Sobre esse acervo ele constrói três representações independentes do texto — TF-IDF lexical, um modelo distribucional SPPMI+SVD treinado no próprio corpus e embeddings neurais executados localmente, na minha máquina — e ordena as oportunidades por afinidade com o meu perfil.
+O que ele fez foi ler o edital inteiro e a produção pública de quem oferece os planos: {{ pulsar.n_opportunities|milhar }} planos de trabalho, {{ pulsar.n_projects|milhar }} projetos e {{ pulsar.n_professors|milhar }} docentes, a partir de {{ pulsar.n_pages|milhar }} páginas do SIGAA e do Lattes, decompostas em {{ pulsar.n_atoms|milhar }} registros individuais — cada projeto, artigo, orientação e linha de pesquisa tratado como um item separado. Cada texto é então representado de três maneiras independentes: pelas palavras que usa, por um modelo de significado treinado no próprio edital e por um modelo neural que roda localmente, na minha máquina. As três são combinadas, e os planos são ordenados por afinidade com o meu perfil.
 {% endif %}
 {% if panel_method %}
 
-Nada disso vale se o ranqueamento não for medido, então ele é avaliado contra sete tarefas de recuperação construídas a partir do próprio edital, nas quais a resposta correta já é conhecida. A tabela abaixo é o resultado, incluindo onde o método perde:
+O ranqueamento em si não me interessa tanto quanto saber se ele acerta. Para medir isso, submeti o sistema a sete provas em que a resposta certa já é conhecida — por exemplo, esconder o título de um plano e verificar se ele é reencontrado a partir do texto, ou tentar reencontrar um docente apenas a partir da obra dele. Cada linha da tabela é uma forma de representar o texto; cada coluna, uma prova; o número é a colocação obtida.
 
 {{ panel_method }}
 {% if panel_method_caption %}
@@ -19,7 +19,7 @@ Nada disso vale se o ranqueamento não for medido, então ele é avaliado contra
 {% endif %}
 {% if fit_is_strong %}
 
-Neste caso o seu plano ficou no percentil {{ opportunity_percentile|round|int }} entre os {{ pulsar.n_opportunities|milhar if pulsar else 'demais' }} planos avaliados{% if matched_skills %}, sobretudo pela proximidade com {{ matched_skills[:3]|join(', ')|lower }}{% endif %} — é a razão de eu escrever a respeito dele com mais atenção.
+No seu caso, este plano ficou no percentil {{ opportunity_percentile|round|int }} entre os {{ pulsar.n_opportunities|milhar if pulsar else 'demais' }} avaliados{% if matched_skills %}, sobretudo pela proximidade com {{ matched_skills[:3]|join(', ')|lower }}{% endif %} — é a razão de eu escrever a respeito dele com mais atenção.
 {% endif %}
 {% if panel_fit %}
 
@@ -36,6 +36,10 @@ SOBRE MIM
 {% if work_lines %}
 
 O QUE PRODUZI RECENTEMENTE
+{% if work_intro %}
+
+{{ work_intro }}
+{% endif %}
 
 {% for line in work_lines %}
 - {{ line }}
@@ -68,7 +72,13 @@ EM ANEXO
 {% endfor %}
 {% endif %}
 
-Gostaria de saber se {% if primary.funded_slots %}a vaga com bolsa deste plano ainda está disponível{% else %}ainda há vaga disponível neste plano{% endif %} e se seria oportuno conversarmos brevemente. Fico à disposição para enviar o currículo Lattes ou qualquer material adicional.
+{% if primary.funded_slots %}
+Uma ressalva antes de perguntar: o PULSAR registrou vaga com bolsa neste plano porque é o que consta no edital. Sei que isso frequentemente não corresponde à situação real — é comum que a bolsa já esteja combinada com um aluno antes mesmo da divulgação, e o sistema não tem como enxergar isso. Então pergunto diretamente, e uma resposta negativa não me constrange: a vaga ainda está aberta?
+{% else %}
+O edital não registra bolsa neste plano, mas sei que o que está publicado nem sempre acompanha o que de fato existe. Então pergunto diretamente: ainda há vaga aberta aqui, com ou sem bolsa?
+{% endif %}
+
+Se houver, ficaria à disposição para conversarmos brevemente, e posso enviar o currículo Lattes ou qualquer material adicional. Se já estiver comprometida, agradeço muito se puder me dizer — assim eu não insisto e procuro em outro lugar.
 
 Agradeço a atenção e o tempo.
 

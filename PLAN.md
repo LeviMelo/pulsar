@@ -1048,6 +1048,31 @@ sentence claims what is true — that it is the only representation with no bad
 case — and the supporting clause disappears automatically if a rebuilt space
 stops supporting it.
 
+**D25 — The reader is a professor, not a reviewer of this codebase.**
+The measurement block was first written as an accurate description of the engine
+and was correspondingly hard to read: six three-letter column heads, "tarefas de
+recuperação", "SPPMI+SVD" unglossed. It is now transposed — representations down
+the side with names a non-specialist can read, tasks numbered across the top with
+a key beneath — which also puts each representation's seven results on one line,
+where the pattern that carries the argument (one row with no bad number) is
+visible without being explained. Two of the seven tasks are described concretely
+in the prose so the table needs no prior reading.
+
+**D26 — A funding flag read from the edital is not a vacancy.**
+`has_funding` says what the edital published, and professors routinely commit a
+bolsa before publication; a draft that treats the flag as ground truth asks a
+question the recipient has to correct. Every funded draft now says where the
+information came from, that the system cannot see a private commitment, and that
+a negative answer is welcome. Both branches are tested.
+
+**D27 — Annex delivery is proved against a copy of the live database.**
+`campaign_attachments` verifies existence and total size, but nothing had shown
+that the bytes survive MIME encoding for the actual campaign. The check copies
+`pulsar.duckdb`, sends the real campaign to an in-process SMTP sink, and compares
+SHA-256 of every received part against the source PDFs. All 62 messages carried
+all four annexes intact. It runs on the copy because `send_campaign` marks rows
+sent, and the real campaign must stay in `draft`.
+
 ---
 
 ## 23. Final note to the next agent

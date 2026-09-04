@@ -97,12 +97,22 @@ about_lines:
 
 # WHAT I HAVE PRODUCED — artefacts, with their real status. A manuscript in
 # preparation is described as such; nothing here is upgraded into a publication.
+#
+# `work_intro` states the window. It is the productivity claim, so it is dated
+# against the artefacts themselves, not rounded down to a more impressive number:
+# the manuscripts carry dates from mid-August, PULSAR and CMapDoc are from this
+# week. Every date is checkable inside the attached PDFs.
+work_intro: >-
+  Todo o material abaixo é recente e datado nos próprios anexos: os manuscritos e
+  o programa científico foram escritos nas últimas três semanas, e o PULSAR, o
+  relatório anexo e a aplicação de mapa conceitual foram construídos nesta semana.
 work_lines:
   - "“Amplitude de detecção e letalidade notificada da leptospirose: estudo ecológico de séries temporais, Brasil, 2007–2025” — manuscrito em preparação. Unidade de análise região de saúde/ano, modelagem binomial hierárquica com estrutura espacial e temporal, e triangulação entre notificação, internação e mortalidade. O argumento é de medida: parte da variação na letalidade notificada reflete qual porção do espectro clínico a vigilância captura, e não apenas a qualidade assistencial"
   - "dois manuscritos de farmacoepidemiologia sobre a dispensação de agonistas do receptor de GLP-1 no SNGPC/Anvisa — um nacional, por UF e região, e outro com resolução municipal sobre as 5.571 unidades, com integração multibase e modelagem espacial. Ambos com aquisição reprodutível, congelamento das fontes e saídas versionadas"
   - "programa científico em saúde cardiovascular da mulher e cardio-obstetrícia, estruturado como portfólio de pesquisa sobre o DATASUS: priorização por valor científico e viabilidade, mapeamento explícito de variáveis e fontes, critérios de descontinuação e destino definido para cada linha"
   - "PegaSUS — motor próprio de descoberta e análise epidemiológica sobre o ecossistema DATASUS/IBGE, com um compêndio que mapeia sistemas, conjuntos, variáveis e a validade temporal de cada campo ao longo das mudanças históricas de esquema"
-  - "PULSAR — o sistema que produziu esta mensagem, descrito no relatório em anexo"
+  - "PULSAR — o sistema que produziu esta mensagem: aquisição, normalização, resolução de entidades, ranqueamento e avaliação, descrito no relatório em anexo"
+  - "CMapDoc — aplicação web de mapas conceituais interativos, em https://levimelo.github.io/mapdoc/. Concebi e implementei sozinho, do desenho da interação e do front-end até a publicação"
 
 # WHAT I WOULD DO — concrete tasks I can take off an orientador's hands on
 # essentially any quantitative or clinical project. Written as verbs, not nouns.

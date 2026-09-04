@@ -35,18 +35,18 @@ SIGNATURE = "Levi de Melo Amorim"
 AFFINITY = "ficou no percentil"
 
 
-def recipient(percentile: float, *, skills=("Séries temporais",), applied=True):
+def recipient(percentile: float, *, skills=("Séries temporais",), applied=True, funded=1):
     return {
         "siape": "1", "professor_name": "maria das gracas taveira",
         "email": "maria@example.invalid",
         "qualifying_opportunities": [{
             "id_opportunity": "9", "project_title": "Projeto X", "plan_title": "Plano Y",
-            "edital": "Edital 01 Pibic 2026-2027", "funded_slots": 1,
+            "edital": "Edital 01 Pibic 2026-2027", "funded_slots": funded,
             "opportunity_percentile": percentile, "already_applied": applied,
             "skills": [{"label": s, "generic": False} for s in skills],
         }],
         "rationale": {
-            "opportunity_percentile": percentile, "funded_slots": 1,
+            "opportunity_percentile": percentile, "funded_slots": funded,
             "already_applied": applied,
             "matched_skills": list(skills), "top_evidence": [],
             "reading": {"facets": {"overall": percentile, "domain": percentile},
@@ -102,7 +102,22 @@ def test_context_never_invents_a_fit_when_the_ranking_produced_none():
 
 @pytest.mark.parametrize("percentile", [0.0, 50.0, 100.0])
 def test_the_ask_is_always_present(percentile):
-    assert "ainda está disponível" in render(percentile)
+    assert "a vaga ainda está aberta?" in render(percentile)
+    assert "ainda há vaga aberta aqui" in render(percentile, funded=0)
+
+
+def test_a_funded_slot_is_reported_as_the_edital_says_it_not_as_fact():
+    """The edital's funding flag is what PULSAR read, not what the professor has.
+
+    Professors commonly allocate a bolsa before publication. A draft that treats
+    the flag as ground truth asks a question the recipient has to correct.
+    """
+    body = render(90.0, funded=1)
+    assert "porque é o que consta no edital" in body
+    assert "já esteja combinada com um aluno" in body
+    assert "o sistema não tem como enxergar isso" in body
+    # And the recipient is given a cost-free way to say no.
+    assert "não insisto" in body
 
 
 def test_the_declared_qualifications_never_name_the_restricted_counterpart():
@@ -138,8 +153,8 @@ def test_the_method_panel_is_shown_to_everyone_including_a_poor_match():
     """It describes the engine, not the recipient, so nothing gates it."""
     for percentile in (7.0, 98.0):
         body = render(percentile, pulsar=PULSAR)
-        assert "posição por tarefa" in body
-        assert "MRR médio" in body
+        assert "representação" in body and "média" in body
+        assert "achar o plano pelo seu título" in body
 
 
 def test_the_fit_panel_obeys_the_same_gate_as_the_prose_claim():
@@ -150,7 +165,7 @@ def test_the_fit_panel_obeys_the_same_gate_as_the_prose_claim():
 
 def test_without_statistics_no_panel_is_drawn_and_nothing_breaks():
     body = render(98.0)
-    assert "posição por tarefa" not in body
+    assert "achar o plano pelo seu título" not in body
     assert "SOBRE MIM" in body, "the rest of the message must still render"
 
 

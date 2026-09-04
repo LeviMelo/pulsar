@@ -50,7 +50,7 @@ def test_the_caption_never_claims_a_superiority_the_numbers_deny():
     assert "quase nunca é a melhor" in caption
     assert "nunca cai abaixo da 2ª posição" in caption
     # It is the only representation without a bad case, so it earns the clause.
-    assert "justifica ranquear pela fusão" in caption
+    assert "não tem um caso ruim" in caption
 
 
 def test_the_caption_drops_the_claim_when_a_rival_is_equally_robust():
@@ -58,7 +58,7 @@ def test_the_caption_drops_the_claim_when_a_rival_is_equally_robust():
             for b in ("title_to_body", "cross_project_area")
             for c, v in (("lexical_word", 0.9), ("fused", 0.9))]
     caption = method_caption({"benchmark": benchmark_summary(rows)})
-    assert caption and "justifica ranquear pela fusão" not in caption
+    assert caption and "não tem um caso ruim" not in caption
 
 
 def test_absent_statistics_produce_no_panel_rather_than_a_broken_one():
@@ -103,4 +103,4 @@ def test_the_fit_panel_reports_every_facet_it_was_given():
     panel = fit_panel(READING, total=187)
     assert "p98" in panel and "p93" in panel and "p62" in panel
     assert "187 planos avaliados" in panel
-    assert "por representação isolada" in panel
+    assert "por cada representação sozinha" in panel

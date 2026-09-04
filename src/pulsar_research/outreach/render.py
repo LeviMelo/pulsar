@@ -91,6 +91,7 @@ def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping
         # A single list under either heading answers the wrong question.
         "about_lines": list(profile.get("about_lines") or []),
         "work_lines": list(profile.get("work_lines") or []),
+        "work_intro": profile.get("work_intro") or "",
         "contribution_lines": list(profile.get("contribution_lines") or []),
         "capability_lines": list(profile.get("capability_lines") or []),
         "annexes": list(profile.get("annexes") or []),

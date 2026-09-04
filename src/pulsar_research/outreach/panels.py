@@ -29,38 +29,34 @@ _PARTIALS = "▏▎▍▌▋▊▉"
 _TRACK = "·"
 INDENT = "   "
 
-# The seven self-supervised retrieval tasks, in the order a reader should meet
-# them: literal recall first, generalisation last. Labels are the operator's
-# language, not the benchmark's internal keys.
+# The seven self-supervised retrieval tasks. Each label is a short description a
+# reader can check against intuition — "hide the title and see if it comes back"
+# — rather than the benchmark's internal key.
 TASK_LABELS: dict[str, str] = {
-    "title_to_body": "plano, a partir do seu título",
-    "masked_title": "idem, com o título mascarado",
+    "title_to_body": "achar o plano pelo seu título",
+    "masked_title": "idem, com o título escondido",
     "objectives_to_methodology": "objetivos → metodologia",
     "sibling_plan": "plano irmão do mesmo projeto",
-    "sibling_deduplicated": "idem, sem sobreposição textual",
-    "cross_project_area": "mesma área, entre projetos",
-    "professor_holdout": "docente, a partir da sua obra",
+    "sibling_deduplicated": "idem, sem texto em comum",
+    "cross_project_area": "mesma área, outro projeto",
+    "professor_holdout": "achar o docente pela obra dele",
 }
 TASK_ORDER = list(TASK_LABELS)
 
-# Column heads are short so that six of them fit inside 66 characters.
+# The table is transposed — representations down the side, tasks across the top —
+# for one reason: it lets each representation carry a name a non-specialist can
+# read, and it puts each representation's seven results on one line, where the
+# pattern (one row with no bad number) is visible without being explained.
 CHANNEL_LABELS: dict[str, str] = {
-    "lexical_word": "pal",
-    "lexical_char": "car",
-    "bm25": "bm25",
-    "bm25f": "bm25",
-    "latent": "svd",
-    "neural": "neu",
-    "fused": "fus",
+    "lexical_word": "palavras (TF-IDF)",
+    "lexical_char": "trechos de palavra",
+    "bm25": "BM25F",
+    "bm25f": "BM25F",
+    "latent": "sentido, treinado no edital",
+    "neural": "neural, rodando local",
+    "fused": "combinação (palavras+sentido+neural)",
 }
 CHANNEL_ORDER = ["lexical_word", "lexical_char", "bm25", "bm25f", "latent", "neural", "fused"]
-
-# Without this the heads are unreadable, and an unreadable table is worse than
-# no table at all.
-CHANNEL_LEGEND = [
-    "pal, car  TF-IDF por palavra e por caractere  ·  bm25  BM25F",
-    "svd  SPPMI+SVD  ·  neu  embeddings neurais  ·  fus  a fusão, usada",
-]
 
 FACET_LABELS: dict[str, str] = {
     "overall": "no conjunto",
@@ -141,7 +137,7 @@ def benchmark_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 
 
 def method_panel(pulsar: Mapping[str, Any] | None) -> str:
-    """Rank of every representation on every retrieval task, plus mean MRR.
+    """Every representation's rank on every task, one representation per row.
 
     Returns "" when the statistics are absent, so a template can guard on it.
     """
@@ -150,52 +146,56 @@ def method_panel(pulsar: Mapping[str, Any] | None) -> str:
     if not channels or not tasks:
         return ""
 
-    heads = [CHANNEL_LABELS.get(c, c[:4]) for c in channels]
-    # Wide enough for "0,85": a mean row whose cells touch is unreadable.
-    widths = [max(5, len(h) + 1) for h in heads]
-    label_width = max(len(TASK_LABELS.get(t, t)) for t in tasks) + 1
+    label_width = max(len(CHANNEL_LABELS.get(c, c)) for c in channels) + 1
+    numbers = [str(i) for i in range(1, len(tasks) + 1)]
 
-    def row(label: str, cells: Sequence[str]) -> str:
-        return f"{INDENT}{label.ljust(label_width)}" + \
-               "".join(cell.rjust(w) for cell, w in zip(cells, widths))
+    def row(label: str, cells: Sequence[str], tail: str) -> str:
+        return (f"{INDENT}{label.ljust(label_width)}"
+                + "".join(cell.rjust(3) for cell in cells)
+                + tail.rjust(7))
 
-    rule = INDENT + "─" * (label_width + sum(widths))
-    lines = [row("posição por tarefa", heads), rule]
-    for task in tasks:
-        ranks = summary["ranks"][task]
-        lines.append(row(TASK_LABELS.get(task, task),
-                         [f"{ranks[c]}º" if c in ranks else "—" for c in channels]))
+    rule = INDENT + "─" * (label_width + 3 * len(tasks) + 7)
+    lines = [row("representação", numbers, "média"), rule]
+    for channel in channels:
+        ranks = [summary["ranks"][t] for t in tasks]
+        lines.append(row(
+            CHANNEL_LABELS.get(channel, channel),
+            [f"{r[channel]}º" if channel in r else "—" for r in ranks],
+            # Two decimals, not three: the means span 0.09 across six
+            # representations, and a third digit would imply a resolution the
+            # sample cannot support.
+            _decimal(summary["means"].get(channel, 0.0)),
+        ))
     lines.append(rule)
-    # Two decimals, not three: the means span 0.09 across six representations,
-    # and a third digit would imply a resolution the sample cannot support.
-    lines.append(row("MRR médio", [_decimal(summary["means"].get(c, 0.0)) for c in channels]))
     lines.append(INDENT)
-    lines.extend(INDENT + line for line in CHANNEL_LEGEND)
+    # The column key, two tasks per line, so the table needs no prior reading.
+    pairs = [f"{i} {TASK_LABELS.get(t, t)}" for i, t in enumerate(tasks, 1)]
+    for start in range(0, len(pairs), 2):
+        lines.append(INDENT + "  ·  ".join(pairs[start:start + 2]))
     return "\n".join(lines)
 
 
 def method_caption(pulsar: Mapping[str, Any] | None) -> str:
     """One sentence about the table, derived from the table.
 
-    The tempting claim — that the fusion is the best representation — is not
-    true on this corpus and is never made. What is true is that it is the only
-    one without a bad case, and the sentence is emitted only while the numbers
-    still say so.
+    The tempting claim — that the combination is the best representation — is
+    not true on this corpus and is never made. What is true is that it is the
+    only one without a bad case, and the sentence is emitted only while the
+    numbers still say so.
     """
     summary = (pulsar or {}).get("benchmark") or {}
     if not summary:
         return ""
-    worst, tasks = summary["fused_worst"], summary["n_tasks"]
+    worst = summary["fused_worst"]
     others = {c: r for c, r in (summary.get("worst_ranks") or {}).items() if c != "fused"}
-    sentence = (
-        "Nenhuma representação vence sempre, e a fusão quase nunca é a melhor "
-        f"isoladamente. O que ela faz é não ter um caso ruim: nas {tasks} tarefas "
-        f"nunca cai abaixo da {worst}ª posição"
-    )
+    sentence = ("Nenhuma delas vence sempre, e a combinação quase nunca é a melhor "
+                f"em uma prova isolada. A questão é a última linha: ela nunca cai "
+                f"abaixo da {worst}ª posição")
     if others and all(rank > worst for rank in others.values()):
-        sentence += (f", enquanto cada uma das outras {len(others)} cai a uma posição "
-                     "pior em pelo menos uma tarefa. É esse comportamento, e não uma "
-                     "média superior, que justifica ranquear pela fusão.")
+        sentence += (", enquanto cada representação sozinha desaba para as últimas "
+                     "colocações em alguma prova. É por isso que o ranqueamento usa "
+                     "a combinação: não porque tenha a melhor média, mas porque não "
+                     "tem um caso ruim.")
     else:
         sentence += "."
     return sentence
@@ -223,7 +223,10 @@ def fit_panel(reading: Mapping[str, Any] | None, *, total: int = 0) -> str:
     agreement = [(CHANNEL_LABELS.get(c, c), channels[c])
                  for c in ("lexical_word", "latent", "neural") if c in channels]
     if agreement:
+        # One per line rather than joined: the representation names are the same
+        # ones the table above uses, and joined they run past any sane wrap.
+        width = max(len(name) for name, _ in agreement) + 2
         lines.append(INDENT)
-        lines.append(f"{INDENT}o mesmo plano, por representação isolada: " +
-                     " · ".join(f"{name} p{value:.0f}" for name, value in agreement))
+        lines.append(f"{INDENT}o mesmo plano, medido por cada representação sozinha")
+        lines.extend(f"{INDENT}{name.ljust(width)}p{value:.0f}" for name, value in agreement)
     return "\n".join(lines)
