@@ -69,6 +69,34 @@ def _opportunity_scores(db: Database, run_id: str, facet: str, channel: str) -> 
     return {str(r.entity_id): float(r.percentile) for r in rows.itertuples()}
 
 
+def _opportunity_readings(db: Database, run_id: str) -> dict[str, dict[str, dict[str, float]]]:
+    """Every facet and every channel percentile, per opportunity.
+
+    One query for the whole corpus: 187 opportunities times a handful of
+    facet/channel pairs is a few thousand rows. Fetched in full because an
+    outreach draft shows *which* facet drove a match, and a per-recipient query
+    inside the campaign write transaction would deadlock on DuckDB's
+    process-level write lock.
+    """
+    rows = db.query_df(
+        "SELECT entity_id, facet, channel, percentile FROM entity_scores "
+        "WHERE run_id=? AND entity_type='opportunity'",
+        [run_id],
+    )
+    out: dict[str, dict[str, dict[str, float]]] = {}
+    for r in rows.itertuples():
+        entry = out.setdefault(str(r.entity_id), {"facets": {}, "channels": {}})
+        percentile = float(r.percentile)
+        # `facets` reads the fused channel across facets: what matched.
+        # `channels` reads the domain facet across channels: whether the
+        # independent representations agree that it matched.
+        if r.channel == "fused":
+            entry["facets"][str(r.facet)] = percentile
+        if r.facet == "domain":
+            entry["channels"][str(r.channel)] = percentile
+    return out
+
+
 def _professor_scores(db: Database, run_id: str, facet: str, channel: str) -> dict[str, float]:
     rows = db.query_df(
         "SELECT entity_id, percentile FROM entity_scores "
@@ -149,6 +177,7 @@ def select_audience(db: Database, query: AudienceQuery, *, run_id: str | None = 
     opp_pct = _opportunity_scores(db, run_id, query.rank_facet, query.rank_channel) if run_id else {}
     current_pct = _professor_scores(db, run_id, "current", query.rank_channel) if run_id else {}
     trajectory_pct = _professor_scores(db, run_id, "trajectory", query.rank_channel) if run_id else {}
+    readings = _opportunity_readings(db, run_id) if run_id else {}
     evidence_rows = _evidence_by_professor(db, run_id) if run_id else {}
     skills_by_opp = _skills_by_entity(db, "opportunity")
 
@@ -189,6 +218,7 @@ def select_audience(db: Database, query: AudienceQuery, *, run_id: str | None = 
             "opportunity_percentile": opportunity_percentile,
             "already_applied": bool(row.get("already_applied")),
             "skills": skills_by_opp.get(oid, []),
+            "reading": readings.get(oid, {}),
         })
 
     out: list[dict[str, Any]] = []
@@ -219,6 +249,9 @@ def _rationale(recipient: dict[str, Any]) -> dict[str, Any]:
         "funded_slots": best.get("funded_slots", 0),
         "already_applied": bool(best.get("already_applied")),
         "opportunity_percentile": round(best.get("opportunity_percentile", 0.0), 1),
+        # The per-facet and per-channel reading of the plan actually written
+        # about, so the draft can show what matched rather than only how much.
+        "reading": best.get("reading", {}),
         "current_percentile": round(recipient["current_percentile"], 1),
         "trajectory_percentile": round(recipient["trajectory_percentile"], 1),
         "matched_skills": [s["label"] for s in best.get("skills", []) if not s.get("generic")][:8],

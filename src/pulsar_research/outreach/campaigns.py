@@ -19,6 +19,7 @@ from typing import Any
 from ..config import AppConfig
 from ..db import Database, json_load, json_text, utcnow
 from ..semantics.provenance import check_staleness, current_run_id, current_space_id
+from .panels import benchmark_summary
 from .render import read_template, render_message
 from .selectors import AudienceQuery, select_audience
 
@@ -101,6 +102,12 @@ def _corpus_stats(db: Database) -> dict[str, Any]:
     stats["n_atoms"] = count(
         "SELECT CAST(json_extract_string(stats_json, '$.atoms') AS BIGINT) FROM semantic_spaces "
         "WHERE space_id = (SELECT value FROM meta WHERE key='current_semantic_space_id')")
+    # The retrieval battery behind the panel in the body. Reduced here, once per
+    # campaign, so all 62 drafts quote one measurement of one semantic space.
+    stats["benchmark"] = benchmark_summary(db.query_df(
+        "SELECT benchmark, channel, metric, value FROM semantic_benchmarks "
+        "WHERE space_id = (SELECT value FROM meta WHERE key='current_semantic_space_id')"
+    ).to_dict("records"))
     # A swallowed error here once produced "0 planos de trabalho" inside a draft.
     # An email that misstates the work behind it is worse than a failed build.
     empty = [k for k, v in stats.items() if isinstance(v, int) and v <= 0]

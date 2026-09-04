@@ -73,15 +73,30 @@ semantic_profile: >-
 # your own words rather than generated, because this is the part of a cold email
 # a professor actually reads. Keep each line short and specific: a capability
 # someone could ask you to demonstrate next week.
-# WHO I AM — milestones and standing roles. Establishes that the work can be
-# trusted to me. Never presented as "what I would do on your project".
+# WHO I AM — milestones and standing roles, drawn from `personal/academic_ledger.md`
+# (gitignored). Establishes that the work can be trusted to me. Never presented
+# as "what I would do on your project": that is `contribution_lines`.
+#
+# Two canonical corrections from the ledger are load-bearing here and must not
+# drift back: the OBMEP result is an honourable mention, NOT a bronze medal; and
+# the PIC/HU result is an approved-but-unclassified proposal, NOT a scholarship.
 about_lines:
-  - "pesquisador no NEES/UFAL, como especialista de domínio em sistemas de informação em saúde e no tratamento de bases públicas do SUS"
-  - "projeto multicêntrico de reumatologia no PIC/HU Brasil, sob orientação do Prof. Thiago Sotero Fragoso — derivação e validação de uma versão do SLE-DAS sem marcadores sorológicos, respondendo pela harmonização dos dados entre os centros e pelo desenho estatístico da validação"
-  - "direção de pesquisa do IFMSA-UFAL, conduzindo a capacitação metodológica da equipe em revisões sistemáticas e metanálises; direção do projeto de extensão HEMOMAIS (UNIMA)"
-  - "cofundador e diretor da Liga Acadêmica de Cirurgia Cardiovascular da UFAL; integrante das ligas de Reumatologia, Neurologia e Neurocirurgia, Anestesiologia, Neurointensivismo e Clínica Médica"
-  - "revisão metodológica de estudos ecológicos com dados do SINAN, incluindo tendência temporal e autocorrelação espacial"
-  - "formação técnica prévia em Eletroeletrônica pelo IFAL; menção honrosa e medalha de bronze na OBMEP"
+  - "5º período de Medicina na FAMED/UFAL, IRA 8,4; ingresso pelo SiSU 2024.1 com 813,02 pontos. Formação técnica anterior em Eletroeletrônica pelo IFAL — Campus Arapiraca, e menção honrosa na OBMEP e na Olimpíada Alagoana de Matemática"
+  - "pesquisador bolsista no Núcleo de Excelência em Tecnologias Sociais (NEES/UFAL), como especialista de domínio em sistemas de informação em saúde e no tratamento de bases públicas do SUS"
+  - "projeto multicêntrico de reumatologia submetido ao PIC/HU Brasil sob orientação do Prof. Thiago Sotero Fragoso, com UFAL, UFMG, UFRGS e UNICAMP — derivação e validação de uma versão do SLE-DAS sem marcadores sorológicos. Respondo pela arquitetura do protocolo, pela harmonização dos dados entre os centros e pelo desenho estatístico da validação externa"
+  - "direção científica do IFMSA-UFAL, onde conduzo a capacitação metodológica da equipe em revisão sistemática, metanálise e desenho de estudos; direção de pesquisa do projeto de extensão HEMOMAIS (UNIMA)"
+  - "cofundador e diretor de iniciação científica da Liga Acadêmica de Cirurgia Cardiovascular da UFAL; integrante das ligas de Reumatologia, Neurologia e Neurocirurgia, Anestesiologia e Dor, Neurointensivismo e Clínica Médica"
+  - "monitor de Bioquímica I (SOI 1) na graduação em Medicina do UNIMA/Afya, onde cursei Medicina antes da transferência para a UFAL"
+  - "trabalho corrente em Python e R sobre bases administrativas de saúde — DATASUS, SINAN, SIM, SINASC, SIH/SIA, CNES, SNGPC/Anvisa, IBGE/SIDRA —, com pipelines reprodutíveis, congelamento de fontes e proveniência por SHA-256"
+
+# WHAT I HAVE PRODUCED — artefacts, with their real status. A manuscript in
+# preparation is described as such; nothing here is upgraded into a publication.
+work_lines:
+  - "“Amplitude de detecção e letalidade notificada da leptospirose: estudo ecológico de séries temporais, Brasil, 2007–2025” — manuscrito em preparação. Unidade de análise região de saúde/ano, modelagem binomial hierárquica com estrutura espacial e temporal, e triangulação entre notificação, internação e mortalidade. O argumento é de medida: parte da variação na letalidade notificada reflete qual porção do espectro clínico a vigilância captura, e não apenas a qualidade assistencial"
+  - "dois manuscritos de farmacoepidemiologia sobre a dispensação de agonistas do receptor de GLP-1 no SNGPC/Anvisa — um nacional, por UF e região, e outro com resolução municipal sobre as 5.571 unidades, com integração multibase e modelagem espacial. Ambos com aquisição reprodutível, congelamento das fontes e saídas versionadas"
+  - "programa científico em saúde cardiovascular da mulher e cardio-obstetrícia, estruturado como portfólio de pesquisa sobre o DATASUS: priorização por valor científico e viabilidade, mapeamento explícito de variáveis e fontes, critérios de descontinuação e destino definido para cada linha"
+  - "PegaSUS — motor próprio de descoberta e análise epidemiológica sobre o ecossistema DATASUS/IBGE, com um compêndio que mapeia sistemas, conjuntos, variáveis e a validade temporal de cada campo ao longo das mudanças históricas de esquema"
+  - "PULSAR — o sistema que produziu esta mensagem, descrito no relatório em anexo"
 
 # WHAT I WOULD DO — concrete tasks I can take off an orientador's hands on
 # essentially any quantitative or clinical project. Written as verbs, not nouns.
@@ -93,9 +108,19 @@ contribution_lines:
   - "preparar figuras, tabelas e o texto para submissão, e manter a documentação do estudo"
 
 # Listed in the outreach body. Must correspond to what `campaign create --attach`
-# actually attaches; the wording here is what the professor reads.
+# actually attaches; the wording here is what the professor reads. Manuscripts
+# are labelled as drafts, because that is what they are.
 annexes:
   - "Relatório técnico do PULSAR — construção do corpus, estrutura temática e avaliação de recuperação semântica (PDF)"
+  - "Leptospirose no Brasil, 2007–2025 — manuscrito em preparação (PDF)"
+  - "Dispensação de agonistas de GLP-1 no SNGPC, recorte nacional — manuscrito em preparação (PDF)"
+  - "Dispensação de agonistas de GLP-1 no SNGPC, recorte municipal — manuscrito em preparação (PDF)"
+
+# Live links, listed after the annexes. A concept-map application is interactive;
+# a static print of it would understate what it does.
+links:
+  - label: "Mapa conceitual interativo, aplicação web de minha autoria"
+    url: "https://levimelo.github.io/mapdoc/"
 
 # Sent verbatim to SIGAA when an application is explicitly confirmed.
 qualifications_text: |-
@@ -103,7 +128,7 @@ qualifications_text: |-
 
   Tenho experiência na concepção e estruturação de projetos científicos, revisão de literatura, elaboração de protocolos, construção e gerenciamento de bases de dados, análise estatística, visualização e interpretação de resultados, redação científica e submissão de trabalhos. Como exemplo recente, participo de projeto multicêntrico de reumatologia (derivação e validação de uma versão do SLE-DAS sem marcadores sorológicos para aferição de atividade do lúpus eritematoso sistêmico), conduzido no PIC/HU Brasil sob orientação do Prof. Thiago Sotero Fragoso, no qual respondi pela harmonização dos dados dos centros participantes e pelo desenho estatístico da validação; também presto revisão metodológica a estudos ecológicos com dados do SINAN, envolvendo análise de tendência temporal e autocorrelação espacial.
 
-  Possuo domínio de Python e R e experiência com automação de fluxos de pesquisa, processamento de grandes bases públicas — especialmente DATASUS, SIDRA e demais fontes do SUS —, análises epidemiológicas e espaciais e desenvolvimento de ferramentas computacionais voltadas à pesquisa, incluindo a arquitetura de um motor próprio de integração e análise espaço-temporal de dados de saúde pública. Minha formação técnica prévia em Eletroeletrônica pelo IFAL e a participação em olimpíadas científicas (menção honrosa e medalha de bronze na OBMEP) complementam esse perfil com raciocínio quantitativo e resolução estruturada de problemas. Meus interesses concentram-se em reumatologia, neurologia, anestesiologia, medicina cardiovascular, epidemiologia e aplicações de ciência de dados e inteligência artificial à saúde. Considero como principais atributos para atividades de pesquisa a autonomia para aprender e implementar métodos novos, a capacidade de transitar entre problemas clínicos e quantitativos e a experiência em transformar questões de pesquisa em protocolos, análises e produtos científicos concretos.
+  Possuo domínio de Python e R e experiência com automação de fluxos de pesquisa, processamento de grandes bases públicas — especialmente DATASUS, SIDRA e demais fontes do SUS —, análises epidemiológicas e espaciais e desenvolvimento de ferramentas computacionais voltadas à pesquisa, incluindo a arquitetura de um motor próprio de integração e análise espaço-temporal de dados de saúde pública. Minha formação técnica prévia em Eletroeletrônica pelo IFAL e a participação em olimpíadas científicas (menção honrosa na OBMEP e na Olimpíada Alagoana de Matemática) complementam esse perfil com raciocínio quantitativo e resolução estruturada de problemas. Meus interesses concentram-se em reumatologia, neurologia, anestesiologia, medicina cardiovascular, epidemiologia e aplicações de ciência de dados e inteligência artificial à saúde. Considero como principais atributos para atividades de pesquisa a autonomia para aprender e implementar métodos novos, a capacidade de transitar entre problemas clínicos e quantitativos e a experiência em transformar questões de pesquisa em protocolos, análises e produtos científicos concretos.
 
 campaign_signature: |-
   Levi de Melo Amorim

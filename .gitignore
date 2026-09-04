@@ -23,3 +23,10 @@ data/
 
 # Personal, machine-specific configuration (never shared).
 config/local.toml
+
+# Personal academic ledger: the canonical source for `config/profile.yaml`.
+# Real identifiers (CPF, RG, telephone) and unpublished manuscript detail.
+personal/
+
+# Unpublished manuscripts kept for annexing to outreach. Not ours to publish.
+past_works/

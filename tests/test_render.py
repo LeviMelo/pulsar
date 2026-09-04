@@ -10,16 +10,26 @@ from __future__ import annotations
 
 import pytest
 
+from pulsar_research.outreach.panels import benchmark_summary
 from pulsar_research.outreach.render import (STRONG_FIT_PERCENTILE, build_context,
                                              read_template, render_message)
 
 PROFILE = {
     "about_lines": ["pesquisador no NEES/UFAL", "direção de pesquisa do IFMSA-UFAL"],
+    "work_lines": ["manuscrito sobre leptospirose, em preparação"],
     "contribution_lines": ["construir e curar a base de dados",
                            "conduzir a análise estatística"],
     "annexes": ["Relatório PULSAR (PDF)"],
+    "links": [{"label": "Mapa conceitual", "url": "https://levimelo.github.io/mapdoc/"}],
     "campaign_signature": "Levi de Melo Amorim",
 }
+# Enough of a benchmark for the method panel to draw something.
+PULSAR = {"n_opportunities": 187, "n_projects": 89, "n_professors": 65,
+          "n_atoms": 2242, "n_pages": 1243, "benchmark": benchmark_summary([
+    {"benchmark": b, "channel": c, "metric": "mrr", "value": v}
+    for b in ("title_to_body", "cross_project_area")
+    for c, v in (("lexical_word", 0.9), ("latent", 0.7), ("fused", 0.8))
+])}
 SIGNATURE = "Levi de Melo Amorim"
 # The gated claim: only a strong fit may tell a recipient where they ranked.
 AFFINITY = "ficou no percentil"
@@ -39,15 +49,18 @@ def recipient(percentile: float, *, skills=("Séries temporais",), applied=True)
             "opportunity_percentile": percentile, "funded_slots": 1,
             "already_applied": applied,
             "matched_skills": list(skills), "top_evidence": [],
+            "reading": {"facets": {"overall": percentile, "domain": percentile},
+                        "channels": {"neural": percentile}},
         },
         "portfolio_evidence": [],
     }
 
 
-def render(percentile: float, **kw) -> str:
+def render(percentile: float, *, pulsar=None, **kw) -> str:
     _, body, _ = render_message(read_template("default_subject.j2"),
                                 read_template("default_body.j2"),
-                                recipient(percentile, **kw), SIGNATURE, PROFILE)
+                                recipient(percentile, **kw), SIGNATURE, PROFILE,
+                                extra={"pulsar": pulsar} if pulsar else None)
     return body
 
 
@@ -102,7 +115,12 @@ def test_the_declared_qualifications_never_name_the_restricted_counterpart():
     from pulsar_research.config import AppConfig
 
     profile = AppConfig.load().load_profile()
-    surfaces = [profile.get("qualifications_text", ""), *profile.get("capability_lines", [])]
+    # Every surface that is actually sent, not only the one sent to SIGAA:
+    # `about_lines` and `work_lines` go to 62 external recipients.
+    surfaces = [profile.get("qualifications_text", ""),
+                *profile.get("capability_lines", []),
+                *profile.get("about_lines", []),
+                *profile.get("work_lines", [])]
     # Naming the counterpart is not the only way to expose the project: NEES plus
     # "monitoring system" plus TabNet plus national scope reconstructs it for
     # anyone who would recognise it. The operator-facing text describes his
@@ -114,3 +132,38 @@ def test_the_declared_qualifications_never_name_the_restricted_counterpart():
             assert restricted not in text, f"{restricted!r} must not appear in operator-facing text"
     assert "NEES" in profile["qualifications_text"], "the affiliation itself is not restricted"
     assert "DATASUS" in profile["qualifications_text"], "nor is the subject matter"
+
+
+def test_the_method_panel_is_shown_to_everyone_including_a_poor_match():
+    """It describes the engine, not the recipient, so nothing gates it."""
+    for percentile in (7.0, 98.0):
+        body = render(percentile, pulsar=PULSAR)
+        assert "posição por tarefa" in body
+        assert "MRR médio" in body
+
+
+def test_the_fit_panel_obeys_the_same_gate_as_the_prose_claim():
+    """A chart asserting alignment is still an assertion of alignment."""
+    assert "percentil deste plano" not in render(7.0, pulsar=PULSAR)
+    assert "percentil deste plano" in render(98.0, pulsar=PULSAR)
+
+
+def test_without_statistics_no_panel_is_drawn_and_nothing_breaks():
+    body = render(98.0)
+    assert "posição por tarefa" not in body
+    assert "SOBRE MIM" in body, "the rest of the message must still render"
+
+
+def test_the_artefacts_offered_are_the_ones_the_profile_declares():
+    body = render(98.0)
+    assert "Relatório PULSAR (PDF)" in body
+    assert "manuscrito sobre leptospirose" in body
+    assert "https://levimelo.github.io/mapdoc/" in body
+
+
+def test_a_half_measured_corpus_refuses_to_render_rather_than_understating_itself():
+    """StrictUndefined is the guard: better a failed build than "0 projetos"."""
+    import jinja2
+
+    with pytest.raises(jinja2.UndefinedError):
+        render(98.0, pulsar={"n_opportunities": 187})

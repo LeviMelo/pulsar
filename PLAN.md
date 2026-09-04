@@ -1016,6 +1016,38 @@ because nobody updated it. Currency now requires an open call, an unexpired end
 year, an explicit active flag with no contradicting dates, or a start within
 `CURRENT_WINDOW_YEARS`. That cut 2,242 "current" atoms to 1,126.
 
+**D22 — The operator profile has one canonical upstream, and it is not this repo.**
+`config/profile.yaml` is now derived from `personal/academic_ledger.md`
+(gitignored: it carries CPF, RG and unpublished manuscripts). The ledger
+separates *truth status* from *documentary status* — a role is firm even when its
+certificate has not been indexed — and carries two standing corrections that had
+already leaked into 62 drafts: the OBMEP result is an honourable mention, not a
+bronze medal, and the PIC/HU result is an approved-but-unclassified proposal, not
+a scholarship. `about_lines` and `work_lines` are now covered by the
+confidentiality test alongside `qualifications_text`, because all three are sent
+to external recipients and only the last one was being checked.
+
+**D23 — Charts in outreach are drawn in text, and only where a chart is honest.**
+An inline image is blocked by default in enough clients to be unreliable, and a
+remote one leaks a read receipt, so `outreach/panels.py` draws in monospace and
+`text_to_html` preserves any fully indented paragraph as a `<pre>` block.
+Two displays were rejected on their merits rather than styled: a bar chart of
+corpus counts (work plans and archived pages do not share an axis) and a bar
+chart of mean MRR (six representations inside 0.09, which as bars would look
+identical while implying a resolution 187 cases do not support). What is drawn
+instead is the *rank of every representation on every task*, which is where the
+real result lives.
+
+**D24 — A chart asserting alignment is an assertion of alignment.**
+The method panel describes the engine and goes to all 62. The fit panel describes
+one work plan and is gated on `STRONG_FIT_PERCENTILE`, exactly like the prose
+claim it sits beside; without the gate a p7 recipient would be shown a bar chart
+of their own poor match. The caption under the method table is *generated from
+the table*, not written: on this corpus fusion wins only 2 of 7 tasks, so the
+sentence claims what is true — that it is the only representation with no bad
+case — and the supporting clause disappears automatically if a rebuilt space
+stops supporting it.
+
 ---
 
 ## 23. Final note to the next agent

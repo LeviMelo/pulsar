@@ -16,6 +16,7 @@ from typing import Any, Mapping
 from jinja2 import Environment, StrictUndefined, Undefined
 
 from ..semantics.normalize import display_person_name
+from .panels import fit_panel, method_caption, method_panel
 
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 
@@ -61,6 +62,8 @@ def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping
     primary = opportunities[0] if opportunities else {}
     rationale = recipient.get("rationale") or {}
     percentile = float(rationale.get("opportunity_percentile") or 0.0)
+    pulsar = dict(extra or {}).get("pulsar")
+    fit_is_strong = percentile >= STRONG_FIT_PERCENTILE
     return {
         **dict(recipient),
         "professor_name": display_person_name(recipient.get("professor_name", "")),
@@ -72,15 +75,26 @@ def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping
         # found. Below the threshold the honest email leads with availability
         # and capability instead of asserting a shared research interest.
         "opportunity_percentile": percentile,
-        "fit_is_strong": percentile >= STRONG_FIT_PERCENTILE,
+        "fit_is_strong": fit_is_strong,
         "already_applied": bool(rationale.get("already_applied")),
+        # Text-drawn analytics. The method panel describes the engine and is the
+        # same in every draft; the fit panel describes one work plan and is
+        # therefore gated on the same threshold as the prose claim above — a
+        # chart asserting alignment is still an assertion of alignment.
+        "panel_method": method_panel(pulsar),
+        "panel_method_caption": method_caption(pulsar),
+        "panel_fit": fit_panel(rationale.get("reading"),
+                               total=int((pulsar or {}).get("n_opportunities") or 0))
+                     if fit_is_strong else "",
         # Deliberately two lists, never one. Credentials say the work can be
         # trusted to him; contributions say what work he would actually take on.
         # A single list under either heading answers the wrong question.
         "about_lines": list(profile.get("about_lines") or []),
+        "work_lines": list(profile.get("work_lines") or []),
         "contribution_lines": list(profile.get("contribution_lines") or []),
         "capability_lines": list(profile.get("capability_lines") or []),
         "annexes": list(profile.get("annexes") or []),
+        "links": list(profile.get("links") or []),
         "signature": signature,
         "sender_name": profile.get("sender_name") or (signature.splitlines() or [""])[0],
         # Measured at campaign-creation time and frozen into the snapshot, so a
@@ -102,12 +116,47 @@ def render_text(subject_template: str, body_template: str, context: Mapping[str,
 _PARAGRAPH = re.compile(r"\n\s*\n")
 
 
+# A text-drawn chart only survives in a monospaced box that does not reflow, so
+# the HTML alternative must not turn one into a <p> of <br>-separated lines. The
+# marker is indentation: every line of every panel is indented (see
+# `panels.INDENT`), and ordinary prose in the templates never is.
+_PRE_STYLE = ("font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;"
+              "font-size:12px;line-height:1.45;white-space:pre;overflow-x:auto;"
+              "margin:0 0 16px;padding:12px 14px;background:#f6f7f9;"
+              "border-left:3px solid #d6dae0;color:#24292f")
+
+
+def _is_preformatted(paragraph: str) -> bool:
+    lines = [ln for ln in paragraph.split("\n") if ln.strip()]
+    return bool(lines) and all(ln.startswith("  ") for ln in lines)
+
+
 def text_to_html(body: str) -> str:
-    """Escape and paragraph-wrap a plaintext body for the HTML alternative."""
-    paragraphs = [p.strip() for p in _PARAGRAPH.split(body) if p.strip()]
-    return "\n".join(
-        "<p>" + html.escape(p).replace("\n", "<br>") + "</p>" for p in paragraphs
-    )
+    """Escape and paragraph-wrap a plaintext body for the HTML alternative.
+
+    Consecutive preformatted paragraphs are merged into one block, so a panel
+    containing a blank line does not render as two boxes with a gap.
+    """
+    paragraphs = [p for p in _PARAGRAPH.split(body) if p.strip()]
+    out: list[str] = []
+    pending: list[str] = []
+
+    def flush() -> None:
+        if pending:
+            out.append(f'<pre style="{_PRE_STYLE}">' +
+                       html.escape("\n\n".join(pending)) + "</pre>")
+            pending.clear()
+
+    for paragraph in paragraphs:
+        if _is_preformatted(paragraph):
+            # Trailing whitespace only widens the box; leading indentation is
+            # the panel's own layout and is kept.
+            pending.append(paragraph.rstrip())
+            continue
+        flush()
+        out.append("<p>" + html.escape(paragraph.strip()).replace("\n", "<br>") + "</p>")
+    flush()
+    return "\n".join(out)
 
 
 def render_html(body_text: str, context: Mapping[str, Any], *, theme: str = "default_email.html") -> str:
