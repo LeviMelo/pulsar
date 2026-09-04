@@ -1,9 +1,21 @@
 Olá, {{ professor_name }},
 
-Meu nome é Levi de Melo Amorim, acadêmico de Medicina da FAMED/UFAL. Identifiquei no SIGAA a oportunidade vinculada ao projeto “{{ primary.project_title or primary.plan_title }}”{% if primary.plan_title and primary.plan_title != primary.project_title %}, com o plano de trabalho “{{ primary.plan_title }}”{% endif %}{% if primary.funded_slots %}, atualmente com {{ primary.funded_slots }} vaga(s) com bolsa indicada(s) no sistema{% endif %}.
+Meu nome é Levi de Melo Amorim, sou acadêmico de Medicina da FAMED/UFAL e {% if already_applied %}me inscrevi{% else %}tenho interesse{% endif %} no plano de trabalho “{{ primary.plan_title or primary.project_title }}”{% if primary.project_title and primary.plan_title and primary.project_title != primary.plan_title %}, do projeto “{{ primary.project_title }}”{% endif %}{% if primary.edital %} ({{ primary.edital }}){% endif %}. Escrevo para me apresentar diretamente, já que a inscrição pelo sistema diz muito pouco sobre quem se candidatou.
+{% if fit_is_strong %}
 
-A temática se aproxima bastante do que venho desenvolvendo{% if matched_skills %}, especialmente no que envolve {{ matched_skills[:4]|join(', ') }}{% endif %}. Tenho experiência com pesquisa quantitativa, epidemiologia, ciência de dados e informática em saúde, e gostaria de saber se ainda há possibilidade de participação e se seria oportuno conversarmos brevemente sobre o projeto e as atividades previstas.
+O plano dialoga de perto com o que venho desenvolvendo{% if matched_skills %}, em particular {{ matched_skills[:3]|join(', ')|lower }}{% endif %}.
+{% endif %}
+{% if capability_lines %}
 
-Fico à disposição para enviar meu currículo e conversar no melhor formato para o senhor(a).
+Em termos práticos, o que eu poderia assumir desde o início:
+
+{% for line in capability_lines %}
+- {{ line }}
+{% endfor %}
+{% endif %}
+
+Gostaria de saber se {% if primary.funded_slots %}a vaga com bolsa deste plano ainda está disponível{% else %}ainda há vaga disponível neste plano{% endif %} e se seria oportuno conversarmos brevemente. Se preferir, envio antes o currículo Lattes e um resumo do que já produzi, para que avalie sem compromisso.
+
+Agradeço a atenção e o tempo.
 
 {% if signature %}{{ signature }}{% endif %}

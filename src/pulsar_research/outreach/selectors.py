@@ -135,8 +135,10 @@ def select_audience(db: Database, query: AudienceQuery, *, run_id: str | None = 
            o.vacancies_text, o.edital, o.quota, o.area, o.large_area, o.objectives, o.methodology,
            COALESCE(pm.publication_count,0) AS publications,
            COALESCE(pm.public_project_count,0) AS public_projects,
-           COALESCE(pm.funding_agency_count,0) AS funders
+           COALESCE(pm.funding_agency_count,0) AS funders,
+           (a.id_opportunity IS NOT NULL) AS already_applied
     FROM opportunities o
+    LEFT JOIN applications a ON a.id_opportunity=o.id_opportunity
     JOIN professors p ON p.siape=o.professor_siape
     LEFT JOIN professor_metrics pm ON pm.siape=o.professor_siape
     WHERE {' AND '.join(clauses)}
@@ -185,6 +187,7 @@ def select_audience(db: Database, query: AudienceQuery, *, run_id: str | None = 
             "objectives": row.get("objectives") or "",
             "methodology": row.get("methodology") or "",
             "opportunity_percentile": opportunity_percentile,
+            "already_applied": bool(row.get("already_applied")),
             "skills": skills_by_opp.get(oid, []),
         })
 
@@ -214,6 +217,7 @@ def _rationale(recipient: dict[str, Any]) -> dict[str, Any]:
         "primary_opportunity": best.get("id_opportunity", ""),
         "primary_title": best.get("plan_title") or best.get("project_title") or "",
         "funded_slots": best.get("funded_slots", 0),
+        "already_applied": bool(best.get("already_applied")),
         "opportunity_percentile": round(best.get("opportunity_percentile", 0.0), 1),
         "current_percentile": round(recipient["current_percentile"], 1),
         "trajectory_percentile": round(recipient["trajectory_percentile"], 1),

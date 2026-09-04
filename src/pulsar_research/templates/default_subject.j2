@@ -1,1 +1,1 @@
-Interesse em pesquisa — {{ primary.plan_title or primary.project_title or 'iniciação científica' }}
+{% if primary.edital %}{{ primary.edital }} — {% endif %}{{ primary.plan_title or primary.project_title or 'iniciação científica' }} — Levi de Melo Amorim

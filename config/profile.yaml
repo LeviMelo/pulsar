@@ -69,6 +69,17 @@ semantic_profile: >-
   revisão sistemática, metanálise, protocolos, bases de dados, modelagem estatística
   e análise de dados públicos do SUS.
 
+# What outreach emails present as concrete, checkable capability. Kept here in
+# your own words rather than generated, because this is the part of a cold email
+# a professor actually reads. Keep each line short and specific: a capability
+# someone could ask you to demonstrate next week.
+capability_lines:
+  - "Python e R para análise, automação e trabalho reprodutível"
+  - "bases públicas do SUS — DATASUS, SINAN, SIH/SIA, SIM/SINASC — e dados do IBGE"
+  - "bioestatística, modelos de regressão, séries temporais e análise espacial"
+  - "revisão sistemática e metanálise, elaboração de protocolos e redação científica"
+  - "construção e curadoria de bases de dados, visualização e dashboards"
+
 # Sent verbatim to SIGAA when an application is explicitly confirmed.
 qualifications_text: |-
   Sou acadêmico de Medicina da Universidade Federal de Alagoas (UFAL), com atuação em iniciação científica e pesquisa aplicada nas interfaces entre epidemiologia, ciência de dados, informática em saúde e pesquisa clínica. Possuo experiência com Python e R, automação de fluxos de pesquisa, bases públicas de saúde, análise estatística, revisão de literatura, elaboração de protocolos, construção e gerenciamento de bases de dados, visualização e interpretação de resultados e redação científica.

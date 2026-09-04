@@ -34,6 +34,11 @@ def read_template(name: str) -> str:
     return (TEMPLATE_DIR / name).read_text(encoding="utf-8")
 
 
+# Above this within-corpus percentile a draft may assert topical alignment.
+# Chosen so the claim survives two recipients comparing their emails.
+STRONG_FIT_PERCENTILE = 70.0
+
+
 def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping[str, Any]) -> dict[str, Any]:
     """The variables a campaign template may use.
 
@@ -44,6 +49,7 @@ def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping
     opportunities = list(recipient.get("qualifying_opportunities") or [])
     primary = opportunities[0] if opportunities else {}
     rationale = recipient.get("rationale") or {}
+    percentile = float(rationale.get("opportunity_percentile") or 0.0)
     return {
         **dict(recipient),
         "professor_name": display_person_name(recipient.get("professor_name", "")),
@@ -51,6 +57,13 @@ def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping
         "opportunities": opportunities,
         "rationale": rationale,
         "matched_skills": rationale.get("matched_skills", []),
+        # A template must not be able to claim more affinity than the ranking
+        # found. Below the threshold the honest email leads with availability
+        # and capability instead of asserting a shared research interest.
+        "opportunity_percentile": percentile,
+        "fit_is_strong": percentile >= STRONG_FIT_PERCENTILE,
+        "already_applied": bool(rationale.get("already_applied")),
+        "capability_lines": list(profile.get("capability_lines") or []),
         "signature": signature,
         "sender_name": profile.get("sender_name") or (signature.splitlines() or [""])[0],
     }
