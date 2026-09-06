@@ -214,6 +214,9 @@ def _build_graph(config: AppConfig, db: Database) -> Any:
     corpus = load_corpus(db)
     projection = g.build(db, corpus, space_id=current_space_id(db) or None)
     stats = g.write_graph(db, projection.entities.values(), projection.edges)
+    # How much of the graph's identity was concluded rather than read. A build
+    # that starts inferring hundreds of merges is a build to look at.
+    stats["inferred_identities"] = len(projection.inferred_identities)
     g.record_build(db, corpus.fingerprint(), stats)
     return stats
 

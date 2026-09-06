@@ -24,6 +24,7 @@ different name-folding rules.
 from __future__ import annotations
 
 import unicodedata
+from typing import Sequence
 
 from ..db import Database
 from ..semantics.normalize import display_person_name, normalize_person_name
@@ -115,3 +116,72 @@ def known_people(db: Database) -> dict[str, str]:
             if row.normalized_alias:
                 out.setdefault(str(row.normalized_alias), str(row.siape))
     return out
+
+
+class PersonResolver:
+    """External co-author name → SIAPE, when it is demonstrably the same person.
+
+    Lattes writes a team member's name however the person who filled the form
+    wrote it. "Ana Malhado" and "Ana Cláudia Mendes Malhado" are one professor;
+    exact matching makes them two, and the graph then attributes half her
+    collaboration to a ghost — which does not merely lose an edge, it moves
+    every degree, centrality and bridging value she and her neighbours have.
+    Fifteen of these were sitting in the live store.
+
+    Three attempts, in decreasing order of confidence:
+
+    1. the exact normalized name, which is what the faculty index holds;
+    2. the alias table, because acquisition already decided that
+       "M. G. M. M. Taveira" on a project team is a particular SIAPE, and
+       re-deriving that here would be a second, weaker answer to a settled
+       question;
+    3. first name, last name, and every token in between appearing in order
+       inside one indexed name — and *only* if exactly one professor matches.
+
+    Rule 3 is deliberately narrow. It will not merge "Ana Malhado" into
+    "Ana Cláudia Mendes Malhado" if a second professor could also be meant, and
+    it refuses a bare surname outright. What it cannot do is tell two people who
+    genuinely share a first and last name apart; that is the same weakness
+    `person:name-…` ids already carry, and the uniqueness requirement is what
+    keeps it from compounding it silently. Every match it makes is counted, so a
+    build reports how much of its own identity it inferred.
+    """
+
+    def __init__(self, db: Database):
+        self._exact = known_people(db)
+        self._by_ends: dict[tuple[str, str], list[tuple[str, list[str]]]] = {}
+        for row in db.query_df("SELECT siape, canonical_name FROM professors").itertuples():
+            tokens = normalize_person_name(row.canonical_name).split()
+            if len(tokens) >= 2:
+                self._by_ends.setdefault((tokens[0], tokens[-1]), []).append(
+                    (str(row.siape), tokens))
+        self.inferred: dict[str, str] = {}
+
+    def resolve(self, name: str) -> str:
+        """The SIAPE this name belongs to, or an empty string."""
+        normalized = normalize_person_name(name)
+        if not normalized:
+            return ""
+        exact = self._exact.get(normalized)
+        if exact:
+            return exact
+        tokens = normalized.split()
+        if len(tokens) < 2:
+            return ""
+        candidates = [(siape, full) for siape, full in self._by_ends.get((tokens[0], tokens[-1]), [])
+                      if _ordered_subset(tokens, full)]
+        if len(candidates) != 1:
+            return ""
+        siape = candidates[0][0]
+        self.inferred[normalized] = siape
+        return siape
+
+
+def _ordered_subset(short: Sequence[str], full: Sequence[str]) -> bool:
+    """Does every token of `short` appear in `full`, in the same order?
+
+    Order matters: "Silva Ana" is not evidence for "Ana … Silva". Dropped middle
+    names are ordinary in Brazilian academic naming; reordered ones are not.
+    """
+    remaining = iter(full)
+    return all(any(token == candidate for candidate in remaining) for token in short)

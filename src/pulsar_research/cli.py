@@ -943,6 +943,10 @@ def graph_status() -> None:
     console.print("   ".join(f"{k} [bold]{v:,}[/bold]" for k, v in info["by_kind"].items()))
     console.rule("edges by relation")
     console.print("   ".join(f"{k} [bold]{v:,}[/bold]" for k, v in info["by_relation"].items()))
+    inferred = int(info.get("build_stats", {}).get("inferred_identities") or 0)
+    if inferred:
+        console.print(f"\n[dim]{inferred} co-author name(s) reached an indexed professor "
+                      "by inference rather than by a source saying so.[/dim]")
 
 
 @graph_app.command("show")

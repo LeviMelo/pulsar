@@ -34,7 +34,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from ..db import Database
 from ..semantics.corpus import Atom, SemanticCorpus
 from ..semantics.normalize import clean_text, display_person_name, normalize_person_name
-from .identity import Names, known_people
+from .identity import Names, PersonResolver
 from .model import Edge, Entity, Kind, Relation, eid, person_id, slug
 
 #: Atom kinds that describe a discrete scholarly output.
@@ -64,6 +64,10 @@ class Projection:
     def __init__(self) -> None:
         self.entities: dict[str, Entity] = {}
         self.edges: list[Edge] = []
+        #: Names an inference decided belonged to an indexed professor, rather
+        #: than a source having said so. Reported by the build so a reader can
+        #: see how much of the graph's identity was concluded rather than read.
+        self.inferred_identities: dict[str, str] = {}
 
     def add(self, entity: Entity) -> str:
         existing = self.entities.get(entity.entity_id)
@@ -231,7 +235,7 @@ def _collaboration(p: Projection, db: Database) -> None:
     # an alias learned after that table was written would otherwise leave two
     # nodes where the faculty has one, and the graph would under-report its own
     # internal density.
-    indexed = known_people(db)
+    resolver = PersonResolver(db)
     rows = db.query_df(
         "SELECT source_siape, target_siape, collaborator_name, weight FROM collaboration_edges")
     for row in rows.itertuples():
@@ -240,7 +244,7 @@ def _collaboration(p: Projection, db: Database) -> None:
             continue
         name = clean_text(row.collaborator_name)
         normalized = normalize_person_name(name)
-        target_siape = str(row.target_siape or "").strip() or indexed.get(normalized, "")
+        target_siape = str(row.target_siape or "").strip() or resolver.resolve(name)
         if not target_siape and not normalized:
             continue
         try:
@@ -252,6 +256,7 @@ def _collaboration(p: Projection, db: Database) -> None:
                          payload={"indexed": False}, sources=("lattes",)))
         p.link(person_id(siape=source), target, Relation.COLLABORATES_WITH,
                weight=float(row.weight or 1), source="lattes")
+    p.inferred_identities.update(resolver.inferred)
 
 
 # ---------------------------------------------------------------------------

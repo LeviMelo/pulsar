@@ -744,6 +744,22 @@ is genuinely weak — two people publishing under one name become one node, and
 one person publishing under two spellings becomes two — and `is_indexed_person()`
 exists so that no measure quietly treats the two classes as equally reliable.
 
+`PersonResolver` closes the half of that which is closable. Lattes records a
+project team member however the person filling the form wrote it, so an indexed
+professor appears on other people's teams under a shortened name. It tries the
+exact normalized name, then the alias table acquisition already built, then —
+only if exactly one professor matches — first name, last name, and every token
+in between appearing in order inside one indexed name. Reordered names and bare
+surnames are refused outright.
+
+On the live store that recovered fifteen nodes, with no ambiguous cases: fifteen
+sets of collaboration edges that had been attributed to a ghost rather than to
+the professor who earned them. That is not one missing edge each. It moved every
+degree, centrality and bridging value those professors and their neighbours had,
+and dropped the community count from 40 to 35. Every inference is counted and
+reported by `graph build` and `graph status`, because a build that starts
+inferring hundreds of merges is a build to look at.
+
 ### 13.2 The vocabulary
 
 `affiliated_with`, `part_of`, `authored`, `supervised`, `leads`, `offers`,
@@ -1555,6 +1571,16 @@ worse than a missing one because it looks like an answer. And data present
 without a journalled run is `unknown`, not `never` — a store bootstrapped from a
 ledger has the rows without the run that fetched them, and calling that "never
 acquired" would cascade a complete store into `blocked`.
+
+**D49 — Name resolution infers, narrowly, and says how often it did.**
+Requiring an exact name match left fifteen indexed professors with a duplicate
+`person:name-…` node holding part of their collaboration. The rule that fixes it
+matches first name, last name and an ordered subset of the middle names, and
+accepts only a unique candidate — so it refuses where two professors could be
+meant, refuses a reordered name, and refuses a bare surname. It cannot tell two
+people who genuinely share a first and last name apart; the uniqueness
+requirement stops that from compounding silently, and the count of inferences is
+journalled into the build so the number is visible rather than assumed small.
 
 ---
 

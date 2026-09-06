@@ -17,6 +17,7 @@ import pytest
 from pulsar_research import graph as g
 from pulsar_research.graph.model import Edge, Entity, Kind, Relation, eid, person_id, slug
 from pulsar_research.graph.store import edge_id
+from pulsar_research.semantics.normalize import normalize_person_name
 
 
 # ---------------------------------------------------------------------------
@@ -204,3 +205,57 @@ def test_a_second_projection_of_the_same_store_is_identical(db):
     assert sorted(first.entities) == sorted(second.entities)
     assert sorted((e.source_id, e.target_id, e.relation.value, e.weight) for e in first.edges) == \
         sorted((e.source_id, e.target_id, e.relation.value, e.weight) for e in second.edges)
+
+
+# ---------------------------------------------------------------------------
+# Identity resolution
+# ---------------------------------------------------------------------------
+
+
+def test_a_dropped_middle_name_still_reaches_the_same_professor(db):
+    """"Ana Malhado" and "Ana Cláudia Mendes Malhado" are one person.
+
+    Lattes records a team member however the person filling the form wrote it.
+    Exact matching makes two nodes, and the graph then attributes half of her
+    collaboration to a ghost — which moves every degree and centrality she and
+    her neighbours have, not merely the one edge.
+    """
+    from pulsar_research.graph.identity import PersonResolver
+    resolver = PersonResolver(db)
+    assert resolver.resolve("Ana Souza") == "10"            # exact
+    assert resolver.resolve("Ana Beatriz Souza") == ""      # an inserted name is not a dropped one
+    with db.connect() as con:
+        con.execute("UPDATE professors SET canonical_name='Ana Beatriz Souza' WHERE siape='10'")
+    assert PersonResolver(db).resolve("Ana Souza") == "10"
+
+
+def test_an_inference_is_refused_when_two_professors_could_be_meant(db):
+    from pulsar_research.graph.identity import PersonResolver
+    with db.connect() as con:
+        con.execute("UPDATE professors SET canonical_name='Ana Claudia Souza' WHERE siape='10'")
+        con.execute("UPDATE professors SET canonical_name='Ana Beatriz Souza' WHERE siape='20'")
+    assert PersonResolver(db).resolve("Ana Souza") == ""
+
+
+def test_a_reordered_name_is_not_a_dropped_one(db):
+    """Order carries information: "Souza Ana" is not evidence for "Ana … Souza"."""
+    from pulsar_research.graph.identity import PersonResolver
+    assert PersonResolver(db).resolve("Souza Ana") == ""
+
+
+def test_a_bare_surname_never_resolves(db):
+    from pulsar_research.graph.identity import PersonResolver
+    assert PersonResolver(db).resolve("Souza") == ""
+    assert PersonResolver(db).resolve("") == ""
+
+
+def test_every_inference_is_counted_so_a_build_can_report_them(db):
+    from pulsar_research.graph.identity import PersonResolver
+    with db.connect() as con:
+        con.execute("UPDATE professors SET canonical_name='Ana Claudia Souza' WHERE siape='10'")
+    resolver = PersonResolver(db)
+    assert resolver.inferred == {}
+    resolver.resolve("Ana Souza")
+    resolver.resolve("Bruno Lima")          # exact, not an inference
+    # Keyed by the normalized form, which is the comparison key everywhere else.
+    assert resolver.inferred == {normalize_person_name("Ana Souza"): "10"}

@@ -156,6 +156,7 @@ def summary(db: Database) -> dict[str, Any]:
         "by_relation": {r.relation: int(r.n) for r in rels.itertuples()},
         "built_at": str(build.iloc[0]["created_at"]) if len(build) else None,
         "corpus_fingerprint": str(build.iloc[0]["corpus_fingerprint"]) if len(build) else None,
+        "build_stats": json.loads(build.iloc[0]["stats_json"] or "{}") if len(build) else {},
     }
 
 

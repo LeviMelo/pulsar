@@ -137,7 +137,7 @@ pulsar graph status                         # size, composition, freshness
 pulsar graph find nobrega                   # name → entity id
 pulsar graph show 1157495                   # one entity: measures + neighbourhood
 pulsar graph top bridging --min-degree 8    # who routes work outside their own cluster
-pulsar graph path 1157495 "Ana Malhado"     # the strongest short chain between two people
+pulsar graph path 1157495 3882870           # the strongest short chain between two people
 ```
 
 Every command that takes an entity accepts a SIAPE, an entity id or a name
