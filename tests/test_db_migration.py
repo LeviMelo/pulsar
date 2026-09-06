@@ -4,7 +4,7 @@ from __future__ import annotations
 import duckdb
 import pytest
 
-from pulsar_research.db import DERIVED_TABLES, Database
+from pulsar_research.db import DERIVED_TABLES, SCHEMA_VERSION, Database
 
 
 @pytest.fixture()
@@ -43,7 +43,11 @@ def test_migration_reshapes_derived_tables_and_keeps_facts(legacy_store):
             assert live == set(expected), f"{table} did not converge on the declared schema"
         assert con.execute("SELECT titulo FROM opportunities").fetchone()[0] == "Epidemiologia espacial"
         assert con.execute("SELECT COUNT(*) FROM meta WHERE key='current_semantic_model_id'").fetchone()[0] == 0
-        assert con.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0] == "3"
+        # Read from the module rather than restating it: the point is that
+        # migration stamps the *current* version, not that it stamps any
+        # particular number.
+        assert con.execute(
+            "SELECT value FROM meta WHERE key='schema_version'").fetchone()[0] == SCHEMA_VERSION
     finally:
         con.close()
 

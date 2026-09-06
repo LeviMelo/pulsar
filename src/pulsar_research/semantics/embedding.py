@@ -5,7 +5,7 @@ PULSAR talks to exactly one embedding surface: an OpenAI-compatible
 codebase knows that LM Studio exists, so swapping in llama.cpp, Ollama or a
 sentence-transformers process is a config change.
 
-Requirements this abstraction is expected to meet (PLAN §27):
+Requirements this abstraction is expected to meet (PLAN §8.7):
 health check, loaded-model verification, model identity, batching, timeout and
 retry, deterministic preprocessing, an on-disk cache, normalization, dimension
 validation, re-indexing and provenance.

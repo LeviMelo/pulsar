@@ -21,7 +21,7 @@ from typing import Any, Iterator
 
 import duckdb
 
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "4"
 
 
 def utcnow() -> str:
@@ -273,6 +273,68 @@ CREATE TABLE IF NOT EXISTS embedding_cache (
 );
 """
 
+# ---------------------------------------------------------------------------
+# The entity graph
+# ---------------------------------------------------------------------------
+
+#: Derived on purpose. Entities and edges are a *projection* of the acquired
+#: facts, not a second copy of them: rebuilt by `pulsar graph build`, thrown away
+#: and rebuilt again whenever the projection rules change. Making the graph
+#: authoritative would mean two places to correct a wrong professor name.
+GRAPH_SCHEMA = r"""
+-- One id space for every kind of thing the platform models, so the derived
+-- tables that already key on (entity_type, entity_id) finally have a registry
+-- to point at.
+CREATE TABLE IF NOT EXISTS graph_entities (
+    entity_id VARCHAR PRIMARY KEY,
+    kind VARCHAR,
+    key VARCHAR,
+    name VARCHAR,
+    normalized_name VARCHAR,
+    payload_json VARCHAR,
+    sources_json VARCHAR,
+    computed_at VARCHAR
+);
+
+-- Typed, weighted, provenanced relations. `weight` means whatever the relation
+-- means and is never comparable across relations; `source` names the
+-- acquisition that produced the edge, so any line on any drawing can be traced
+-- back to a page. Symmetric relations are stored once in canonical id order.
+CREATE TABLE IF NOT EXISTS graph_edges (
+    edge_id VARCHAR PRIMARY KEY,
+    source_id VARCHAR,
+    target_id VARCHAR,
+    relation VARCHAR,
+    weight DOUBLE,
+    directed BOOLEAN,
+    year BIGINT,
+    source VARCHAR,
+    evidence_json VARCHAR,
+    computed_at VARCHAR
+);
+
+-- Tall, so a new measure is a new row rather than a schema migration. The wide
+-- `professor_metrics` table below is the portfolio counting that predates this
+-- and still serves the ranking screens; structural measures live here because
+-- they apply to any entity, not only to people.
+CREATE TABLE IF NOT EXISTS entity_metrics (
+    entity_id VARCHAR,
+    metric VARCHAR,
+    value DOUBLE,
+    payload_json VARCHAR,
+    computed_at VARCHAR
+);
+
+-- What the projection saw, so `pulsar graph status` can answer "is this stale"
+-- without recomputing it.
+CREATE TABLE IF NOT EXISTS graph_builds (
+    build_id VARCHAR PRIMARY KEY,
+    corpus_fingerprint VARCHAR,
+    stats_json VARCHAR,
+    created_at VARCHAR
+);
+"""
+
 PROFESSOR_METRICS_SCHEMA = r"""
 CREATE TABLE IF NOT EXISTS professor_metrics (
     siape VARCHAR PRIMARY KEY,
@@ -391,7 +453,8 @@ class Database:
             # Derived tables are disposable by definition; acquired and outreach
             # tables hold state and are never dropped here.
             report["rebuilt"] = _reconcile_derived(con, existing)
-            for block in (ACQUIRED_SCHEMA, DERIVED_SCHEMA, PROFESSOR_METRICS_SCHEMA, OUTREACH_SCHEMA):
+            for block in (ACQUIRED_SCHEMA, DERIVED_SCHEMA, GRAPH_SCHEMA,
+                          PROFESSOR_METRICS_SCHEMA, OUTREACH_SCHEMA):
                 con.execute(block)
             # A populated outreach table is never dropped, so it can only gain
             # columns by ALTER. Done on every run against the declared DDL rather
@@ -428,6 +491,7 @@ class Database:
 
     def counts(self) -> dict[str, int]:
         tables = ["professors", "projects", "opportunities", "applications",
+                  "graph_entities", "graph_edges",
                   "entity_scores", "professor_evidence", "campaigns", "embedding_cache"]
         out: dict[str, int] = {}
         with self.connect(read_only=True) as con:
@@ -462,7 +526,7 @@ def _declared_columns(*blocks: str) -> dict[str, tuple[str, ...]]:
     return out
 
 
-DERIVED_TABLES = _declared_columns(DERIVED_SCHEMA, PROFESSOR_METRICS_SCHEMA)
+DERIVED_TABLES = _declared_columns(DERIVED_SCHEMA, GRAPH_SCHEMA, PROFESSOR_METRICS_SCHEMA)
 OUTREACH_TABLES = _declared_columns(OUTREACH_SCHEMA)
 
 
