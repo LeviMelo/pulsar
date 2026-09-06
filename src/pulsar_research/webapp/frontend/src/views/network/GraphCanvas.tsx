@@ -11,9 +11,9 @@ import { SERIES } from '../../components/charts';
 import { hideTip, showTip } from '../../components/charts/Tooltip';
 import { num, short, shortName } from '../../lib/format';
 import {
-  colourFor, edgeStyle, sizeScale, tooltipBits,
+  colourFor, edgeStyle, facetNames, sizeScale, tooltipBits,
 } from './encodings';
-import { H, W, type SimNode, type Simulation } from './simulation';
+import { H, W, type Simulation } from './simulation';
 
 export interface CanvasView {
   colour: string;
@@ -363,8 +363,7 @@ function Legend({ sim, view }: { sim: Simulation; view: CanvasView }) {
   } else if (view.colour === 'fit' || view.colour === 'methods_pct') {
     swatches.push(['var(--surface-3)', 'not profiled']);
   } else {
-    const names = [...new Set(sim.nodes.map((n) => facetLabel(n, view.colour)))]
-      .sort().slice(0, 8);
+    const names = facetNames(sim.nodes, view.colour).slice(0, 8);
     names.forEach((value, index) => {
       swatches.push([`var(${SERIES[index % SERIES.length]})`, short(String(value), 26)]);
     });
@@ -395,10 +394,6 @@ function Legend({ sim, view }: { sim: Simulation; view: CanvasView }) {
       )}
     </div>
   );
-}
-
-function facetLabel(node: SimNode, key: string) {
-  return (node as unknown as Record<string, string>)[key] || '—';
 }
 
 /* ---------------------------------------------------------------- cards */

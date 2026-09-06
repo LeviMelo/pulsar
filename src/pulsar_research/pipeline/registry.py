@@ -222,14 +222,35 @@ def _build_graph(config: AppConfig, db: Database) -> Any:
 
 
 def _build_graph_metrics(config: AppConfig, db: Database) -> Any:
+    """Two measurements of the same relation, because they answer two questions.
+
+    The whole co-authorship graph says which research world a person lives in,
+    and for this faculty the answer is mostly "their own": externals outnumber
+    colleagues fifty to one, so almost every professor lands in a community made
+    of their own co-authors. That is a real finding and a useless colouring.
+
+    The graph induced on the indexed faculty answers the other question — which
+    clusters this faculty decomposes into, as against the units it is
+    administratively divided into — and it is the one the console draws. Both are
+    stored, the second under a `faculty_` prefix, because `entity_metrics` is
+    tall and a second measurement is rows rather than a migration.
+    """
     from .. import graph as g
     from ..graph.model import Relation, is_indexed_person
     from ..intelligence.network import structural_metrics
     adjacency = g.adjacency(db, relations=[Relation.COLLABORATES_WITH])
     inside = [node for node in adjacency if is_indexed_person(node)]
     rows, stats = structural_metrics(adjacency, inside=inside)
+
+    induced = {node: {other: weight for other, weight in adjacency[node].items()
+                      if is_indexed_person(other)}
+               for node in inside}
+    faculty_rows, faculty_stats = structural_metrics(induced)
+    rows.extend((entity_id, f"faculty_{metric}", value, extra)
+                for entity_id, metric, value, extra in faculty_rows)
+
     g.write_metrics(db, rows)
-    return stats
+    return {**stats, **{f"faculty_{k}": v for k, v in faculty_stats.items()}}
 
 
 # ---------------------------------------------------------------------------

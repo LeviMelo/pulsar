@@ -143,6 +143,11 @@ pulsar graph path 1157495 3882870           # the strongest short chain between 
 Every command that takes an entity accepts a SIAPE, an entity id or a name
 fragment, and refuses rather than guessing when a fragment is ambiguous.
 
+The console reads the same graph. Its Network screen gains a fifth question —
+*where the faculty actually splits* — which colours by co-authorship cluster and
+sizes by who sits between them; putting that next to *centre* is the whole point,
+since one is who publishes with whom and the other is who is filed under whom.
+
 Structural measures are computed over co-authorship alone — shared technique and
 shared subject are inferred similarities, not observed ties, and mixing them into
 one centrality gives a number that means neither. Shares like `bridging` are

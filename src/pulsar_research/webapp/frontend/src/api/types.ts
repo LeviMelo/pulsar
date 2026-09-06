@@ -182,6 +182,15 @@ export interface GraphNode {
   latest_year?: number | null;
   external_collaborators?: number | null;
   keywords?: string[];
+  /* Structural measures, absent until `pulsar graph measure` has run. The first
+   * three are measured over the faculty-induced co-authorship graph — the one
+   * actually drawn — and external_reach over the whole one, because its subject
+   * is precisely the collaboration that never appears here. */
+  community?: number | null;
+  betweenness?: number | null;
+  bridging?: number | null;
+  external_reach?: number | null;
+  faculty_degree?: number | null;
   current_pct?: number | null;
   trajectory_pct?: number | null;
   methods_pct?: number | null;

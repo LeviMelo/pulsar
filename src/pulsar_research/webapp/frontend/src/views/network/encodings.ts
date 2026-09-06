@@ -16,13 +16,18 @@ import type { SimLink, SimNode } from './simulation';
 
 export const GROUP_BY = [
   ['center', 'Centre'],
+  ['community', 'Co-authorship cluster'],
   ['state', 'Campaign state'],
   ['none', 'Nothing — one field'],
 ] as const;
 
+/* `community` against `center` is the pair worth having: one is who publishes
+ * with whom, the other is who is filed under whom, and the gap between them is
+ * the thing an org chart cannot tell you. */
 export const COLOUR_BY = [
   ['state', 'Campaign state'],
   ['center', 'Centre'],
+  ['community', 'Co-authorship cluster'],
   ['fit', 'Overall fit'],
   ['methods_pct', 'Methods fit'],
 ] as const;
@@ -38,6 +43,9 @@ export const EDGE_BY = [
 
 export const SIZE_BY = [
   ['degree', 'Connections here'],
+  ['betweenness', 'Sits between clusters'],
+  ['bridging', 'Work outside own cluster'],
+  ['external_reach', 'Reach outside the faculty'],
   ['funded_slots', 'Funded slots'],
   ['opportunities', 'Open plans'],
   ['publications', 'Publications'],
@@ -85,7 +93,19 @@ export const ASKS: readonly Ask[] = [
     hint: 'Co-authorship inside this faculty. Sparse, factual, and social rather than thematic.',
     mode: 'collaboration', colour: 'center', size: 'degree', edge: 'strength',
   },
+  {
+    key: 'structure', label: 'Where the faculty actually splits',
+    hint: 'Clusters as co-authorship draws them, not as the org chart does. Size is who sits between.',
+    mode: 'collaboration', colour: 'community', size: 'betweenness', edge: 'strength',
+  },
 ];
+
+/* Community ids arrive ranked by size, so the tail really is the tail: on this
+ * faculty the six largest clusters hold 46 of 65 people and the other thirteen
+ * average two. Naming each of those thirteen would give the drawing nineteen
+ * territories, eight of them one person wide, and a legend nobody can read.
+ * The exact cluster is still on the node, and `pulsar graph show` prints it. */
+const COMMUNITY_SHOWN = 6;
 
 /** The value a node is grouped or coloured by, as a printable string. */
 export function facetOf(node: GraphNode, key: string): string {
@@ -95,7 +115,26 @@ export function facetOf(node: GraphNode, key: string): string {
       ? (node.state ? STATE_LABEL[node.state] : 'written to')
       : 'not contacted';
   }
+  if (key === 'community') {
+    // Cluster 0 is a real cluster — and the largest one — so this cannot fall
+    // through to the falsy check below.
+    if (node.community == null) return 'not measured';
+    return node.community < COMMUNITY_SHOWN
+      ? `cluster ${node.community}` : 'smaller clusters';
+  }
   return (node as unknown as Record<string, string>)[key] || '—';
+}
+
+/**
+ * The distinct facet values, in the order the legend and the palette both use.
+ *
+ * Shared rather than repeated so a swatch always means what the node it sits
+ * beside is coloured with. Sorted numerically-aware, because plain string order
+ * puts "cluster 10" before "cluster 2".
+ */
+export function facetNames(nodes: readonly GraphNode[], key: string): string[] {
+  return [...new Set(nodes.map((node) => facetOf(node, key)))]
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
 export interface EdgeStyle {
@@ -156,7 +195,7 @@ export function colourFor(nodes: readonly GraphNode[], key: string): (node: Grap
       return { fill: 'var(--accent)', opacity: Number((0.14 + 0.86 * (value / 100)).toFixed(2)) };
     };
   }
-  const names = [...new Set(nodes.map((n) => facetOf(n, key)))].sort();
+  const names = facetNames(nodes, key);
   const map = new Map(names.map((v, i) => [v, `var(${SERIES[i % SERIES.length]})`]));
   return (node) => ({ fill: map.get(facetOf(node, key)) || 'var(--surface-3)', opacity: 0.88 });
 }
@@ -169,6 +208,9 @@ export function tooltipBits(node: SimNode): string[] {
       ? `${node.funded_slots} funded slot${node.funded_slots === 1 ? '' : 's'}`
       : '',
     Number.isFinite(node.current_pct as number) ? `fit p${Math.round(node.current_pct!)}` : '',
+    node.community == null ? '' : `cluster ${node.community}`,
+    Number.isFinite(node.external_reach as number)
+      ? `${Math.round(node.external_reach! * 100)}% of ties leave the faculty` : '',
     node.contacted ? (node.state ? STATE_LABEL[node.state] : 'written to') : '',
   ].filter(Boolean);
 }

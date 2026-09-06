@@ -220,3 +220,78 @@ def test_the_repository_is_reused_rather_than_reimplemented(spaced):
     frame = Repository(spaced).professors()
     graph = build(spaced, "collaboration")
     assert len(graph["nodes"]) == len(frame)
+
+
+# ------------------------------------------------- reading from the platform
+
+
+def _project(db):
+    """Build and measure the entity graph, as `pulsar pipeline run` would."""
+    from pulsar_research import graph as g
+    from pulsar_research.graph.model import Relation, is_indexed_person
+    from pulsar_research.intelligence.network import structural_metrics
+    from pulsar_research.semantics.corpus import load_corpus
+    corpus = load_corpus(db)
+    projection = g.build(db, corpus)
+    g.record_build(db, corpus.fingerprint(),
+                   g.write_graph(db, projection.entities.values(), projection.edges))
+    adjacency = g.adjacency(db, relations=[Relation.COLLABORATES_WITH])
+    inside = [n for n in adjacency if is_indexed_person(n)]
+    rows, _ = structural_metrics(adjacency, inside=inside)
+    induced = {n: {o: w for o, w in adjacency[n].items() if is_indexed_person(o)} for n in inside}
+    faculty, _ = structural_metrics(induced)
+    rows.extend((e, f"faculty_{m}", v, x) for e, m, v, x in faculty)
+    g.write_metrics(db, rows)
+
+
+def test_the_drawn_graph_inherits_the_platforms_identity_resolution(spaced):
+    """A co-author recorded under a shortened name is still a colleague.
+
+    Lattes records "Bruno Lima" on one team and "Bruno" on another. The raw
+    table keeps the second as a stranger — no `target_siape` — so a console that
+    derives its own graph from that table under-reports the faculty's internal
+    density. Reading the entity graph instead inherits the resolution rather
+    than re-deriving a weaker version of it.
+    """
+    with spaced.connect() as con:
+        con.execute("UPDATE professors SET canonical_name='Bruno Cesar Lima' WHERE siape='20'")
+        con.execute("INSERT INTO collaboration_edges VALUES ('10','','Bruno Lima',4,'')")
+    assert build(spaced, "collaboration")["edges"] == []        # no graph built yet
+
+    _project(spaced)
+    graph = build(spaced, "collaboration")
+    assert len(graph["edges"]) == 1
+    assert {graph["edges"][0]["source"], graph["edges"][0]["target"]} == {"10", "20"}
+
+
+def test_the_raw_table_is_still_drawn_when_no_graph_has_been_built(spaced):
+    """A store that has never run `graph build` must not show an empty canvas.
+
+    An empty drawing does not read as "not computed"; it reads as a faculty
+    where nobody collaborates.
+    """
+    with spaced.connect() as con:
+        con.execute("INSERT INTO collaboration_edges VALUES ('10','20','Bruno Lima',3,'')")
+    assert len(build(spaced, "collaboration")["edges"]) == 1
+
+
+def test_structural_measures_reach_the_node_once_they_exist(spaced):
+    with spaced.connect() as con:
+        con.execute("INSERT INTO collaboration_edges VALUES ('10','20','Bruno Lima',3,'')")
+        con.execute("INSERT INTO collaboration_edges VALUES ('10','','Alguém de Fora',5,'')")
+    assert build(spaced, "collaboration")["nodes"][0]["community"] is None
+
+    _project(spaced)
+    ana = next(n for n in build(spaced, "collaboration")["nodes"] if n["id"] == "10")
+    assert ana["community"] == 0
+    assert ana["betweenness"] == 0.0            # two people cannot have a middle
+    # Five of her eight units of tie strength go to someone outside the faculty.
+    assert ana["external_reach"] == pytest.approx(5 / 8)
+
+
+def test_the_measures_survive_the_servers_strict_json(spaced):
+    """`allow_nan=False`: a NaN in a structural measure is a blank screen."""
+    with spaced.connect() as con:
+        con.execute("INSERT INTO collaboration_edges VALUES ('10','20','Bruno Lima',3,'')")
+    _project(spaced)
+    json.dumps(build(spaced, "collaboration"), allow_nan=False)

@@ -1037,11 +1037,31 @@ who is adjacent to a thread that has gone quiet. Those decide a second wave.
   both units, unconnected here — and each one is also the filter that shows who
   it counted, listed in the rail beside it. A number nobody can act on is
   decoration.
-- **The controls ask questions, not encodings.** Four tabs — where I've
-  reached, who works like me, who studies like me, who works together — each
-  setting the graph, colour, size and edge meaning together, because those are
-  not four independent choices. The raw encodings stay behind a Display
-  disclosure for anyone who wants to take them apart.
+- **The controls ask questions, not encodings.** Five tabs — where I've
+  reached, who works like me, who studies like me, who works together, where
+  the faculty actually splits — each setting the graph, colour, size and edge
+  meaning together, because those are not five independent choices. The raw
+  encodings stay behind a Display disclosure for anyone who wants to take them
+  apart.
+- **The graph is read from the platform, not re-derived.** Ties and structural
+  measures come from `graph_edges` and `entity_metrics` (§13). That is not
+  tidiness: identity resolution lives one layer down, and a console deriving its
+  own graph from `collaboration_edges` records fifteen professors as strangers
+  to each other because their names appear shortened on other people's Lattes
+  teams. A store that has never run `graph build` falls back to the raw table,
+  because an empty canvas does not read as "not computed" — it reads as a
+  faculty where nobody collaborates.
+- **Clusters are drawn against units, which is the point of drawing them.**
+  Colour and grouping both offer *co-authorship cluster* alongside *centre*: one
+  is who publishes with whom, the other is who is filed under whom, and the gap
+  between them is what an org chart cannot say. The communities are measured
+  over the faculty-induced subgraph, not the whole co-authorship network —
+  measured over the whole one, externals outnumber colleagues fifty to one and
+  almost every professor lands in a community made of their own co-authors,
+  which is a true statement about the world and a useless colouring of these 65
+  people. Community ids arrive ranked by size, so the six largest are named and
+  the thirteen-strong tail is one band: nineteen territories, eight of them one
+  person wide, is a drawing nobody can read.
 - **Edges justify themselves.** Thickness carries tie strength; colour is held
   back for the one thing position cannot show, which ties bridge from someone
   written to toward someone not. And every tie names the terms it was computed

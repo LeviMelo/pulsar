@@ -201,7 +201,10 @@ export class Simulation {
 
   groupNames(): string[] {
     if (this.groupKey === 'none') return [];
-    return [...new Set(this.nodes.map((n) => this.facetOf(n, this.groupKey)))].sort();
+    // Numeric-aware so "cluster 10" does not sort before "cluster 2", which
+    // would put the bands in an order the legend disagrees with.
+    return [...new Set(this.nodes.map((n) => this.facetOf(n, this.groupKey)))]
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   }
 
   headcount(name: string): number {

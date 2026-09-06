@@ -99,36 +99,118 @@ def _cosine(a: dict[str, float], b: dict[str, float]) -> float:
     return 0.0 if na == 0 or nb == 0 else dot / (na * nb)
 
 
+def _graph_adjacency(db: Database) -> dict[str, dict[str, float]]:
+    """Co-authorship out of the entity graph, or nothing if it has not been built.
+
+    Read from the graph rather than from `collaboration_edges` because identity
+    resolution lives there: fifteen professors appear on other people's Lattes
+    teams under a shortened name, and the raw table records those rows with an
+    empty `target_siape` — as strangers. Deriving the faculty's internal graph
+    from the raw table therefore under-reports its own density, and no amount of
+    care in this module would fix it, because the join it needs has already been
+    done one layer down.
+    """
+    if not db.table_exists("graph_edges"):
+        return {}
+    from ..graph import adjacency
+    from ..graph.model import Relation
+    return adjacency(db, relations=[Relation.COLLABORATES_WITH])
+
+
 def _collaboration_edges(db: Database, known: set[str]) -> list[dict[str, Any]]:
     """Only edges whose *both* endpoints are indexed supervisors.
 
-    The store holds 4,545 collaboration rows, but most name an external
-    co-author with no SIAPE. Those belong to an ego view of one professor, not
-    to a graph of this faculty, and including them would bury the 220 internal
-    edges under thousands of degree-one leaves.
+    The graph holds ~4,400 co-authorship ties, but all but 150 of them name
+    someone outside the faculty. Those belong to an ego view of one professor,
+    not to a graph of this faculty, and including them would bury the internal
+    edges under three thousand degree-one leaves.
     """
-    frame = db.query_df(
-        "SELECT source_siape, target_siape, SUM(weight) AS weight "
-        "FROM collaboration_edges WHERE COALESCE(target_siape,'')<>'' "
-        "GROUP BY source_siape, target_siape")
-    seen: dict[tuple[str, str], float] = {}
-    for row in frame.itertuples():
-        a, b = str(row.source_siape), str(row.target_siape)
-        if a == b or a not in known or b not in known:
-            continue
-        key = (a, b) if a < b else (b, a)
-        seen[key] = seen.get(key, 0.0) + float(row.weight or 1)
+    graph = _graph_adjacency(db)
+    if graph:
+        seen: dict[tuple[str, str], float] = {}
+        for node, neighbours in graph.items():
+            a = _siape(node)
+            if a not in known:
+                continue
+            for other, weight in neighbours.items():
+                b = _siape(other)
+                if b not in known or a == b:
+                    continue
+                seen[(a, b) if a < b else (b, a)] = float(weight)
+    else:
+        # No graph yet. Fall back to the raw table so a store that has never run
+        # `pulsar graph build` still draws something, rather than showing an
+        # empty canvas that looks like a faculty with no collaboration.
+        frame = db.query_df(
+            "SELECT source_siape, target_siape, SUM(weight) AS weight "
+            "FROM collaboration_edges WHERE COALESCE(target_siape,'')<>'' "
+            "GROUP BY source_siape, target_siape")
+        seen = {}
+        for row in frame.itertuples():
+            a, b = str(row.source_siape), str(row.target_siape)
+            if a == b or a not in known or b not in known:
+                continue
+            key = (a, b) if a < b else (b, a)
+            seen[key] = seen.get(key, 0.0) + float(row.weight or 1)
+
     return [{"source": a, "target": b, "weight": weight,
              "why": [], "shared": int(weight)}
             for (a, b), weight in seen.items()]
 
 
+def _siape(entity_id: str) -> str:
+    """The SIAPE inside a `person:` id, or the id itself for a name-only node."""
+    return entity_id.split(":", 1)[1] if entity_id.startswith("person:") else entity_id
+
+
 def _external_degree(db: Database) -> dict[str, int]:
     """How many co-authors each professor has outside the indexed faculty."""
+    from ..graph.model import is_indexed_person
+    graph = _graph_adjacency(db)
+    if graph:
+        return {_siape(node): sum(1 for other in neighbours if not is_indexed_person(other))
+                for node, neighbours in graph.items() if is_indexed_person(node)}
     frame = db.query_df(
         "SELECT source_siape, COUNT(DISTINCT collaborator_name) AS n "
         "FROM collaboration_edges WHERE COALESCE(target_siape,'')='' GROUP BY source_siape")
     return {str(r.source_siape): int(r.n) for r in frame.itertuples()}
+
+
+#: What the drawn graph is measured over. Betweenness, community and bridging
+#: come from the faculty-induced subgraph, because that is the graph on screen —
+#: measured over the whole co-authorship network almost every professor lands in
+#: a community made of their own external co-authors, which is a true statement
+#: about the world and a useless colouring of these 65 people. External reach is
+#: the exception and is read from the full graph, because its entire subject is
+#: the collaboration that leaves this faculty and therefore never appears here.
+_STRUCTURE = {
+    "faculty_betweenness": "betweenness",
+    "faculty_bridging": "bridging",
+    "faculty_community": "community",
+    "faculty_degree": "faculty_degree",
+    "external_reach": "external_reach",
+}
+
+
+def _structure(db: Database) -> dict[str, dict[str, float]]:
+    """``siape -> structural measure -> value``, empty until `graph measure` runs.
+
+    These are the things the drawing could not previously say about a node,
+    because none of them is a property of the node: whether it sits between
+    groups, which cluster it actually belongs to as opposed to which unit it is
+    filed under, how much of its work leaves that cluster, and how much of it
+    leaves the faculty entirely.
+    """
+    if not db.table_exists("entity_metrics"):
+        return {}
+    placeholders = ",".join("?" * len(_STRUCTURE))
+    frame = db.query_df(
+        f"SELECT entity_id, metric, value FROM entity_metrics WHERE metric IN ({placeholders}) "
+        "AND entity_id LIKE 'person:%'", list(_STRUCTURE))
+    out: dict[str, dict[str, float]] = {}
+    for row in frame.itertuples():
+        out.setdefault(_siape(str(row.entity_id)), {})[_STRUCTURE[str(row.metric)]] = float(row.value)
+    return out
 
 
 def build(db: Database, mode: str, *, display_name=None) -> dict[str, Any]:
@@ -156,6 +238,7 @@ def build(db: Database, mode: str, *, display_name=None) -> dict[str, Any]:
                                 "state": state or oc.DEFAULT_STATE}
 
     external = _external_degree(db)
+    structure = _structure(db)
     # A couple of words of subject matter per node. The graph can encode
     # position, size and colour but never *what the person works on*, and that
     # is exactly what decides whether a neighbour is worth opening next.
@@ -190,6 +273,11 @@ def build(db: Database, mode: str, *, display_name=None) -> dict[str, Any]:
             "latest_year": _int(getattr(row, "latest_evidence_year", None)),
             "external_collaborators": external.get(siape, 0),
             "keywords": keywords.get(siape, []),
+            "betweenness": structure.get(siape, {}).get("betweenness"),
+            "bridging": structure.get(siape, {}).get("bridging"),
+            "external_reach": structure.get(siape, {}).get("external_reach"),
+            "community": (lambda v: None if v is None else int(v))(
+                structure.get(siape, {}).get("community")),
             "current_pct": _float(getattr(row, "current_fused_pct", None)),
             "trajectory_pct": _float(getattr(row, "trajectory_fused_pct", None)),
             "methods_pct": _float(getattr(row, "methods_fused_pct", None)),
