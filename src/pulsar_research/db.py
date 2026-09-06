@@ -337,6 +337,20 @@ CREATE TABLE IF NOT EXISTS campaign_messages (
     provider_message_id VARCHAR,
     error VARCHAR
 );
+
+-- What happened after a message was sent. Outreach is not finished when the
+-- mail leaves: a reply arrives, a vacancy turns out to be taken, a conversation
+-- goes quiet, and exactly one of them ends in a SIGAA indication. None of that
+-- was recordable anywhere, so it lived in the operator's memory.
+CREATE TABLE IF NOT EXISTS campaign_outcomes (
+    campaign_id VARCHAR,
+    siape VARCHAR,
+    state VARCHAR,
+    note VARCHAR,
+    replied_at VARCHAR,
+    updated_at VARCHAR
+);
+
 """
 
 #: Tables from the v1/v2 engines whose content is fully superseded. They are

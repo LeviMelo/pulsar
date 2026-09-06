@@ -205,16 +205,33 @@ def report(
 
 
 @app.command()
-def dashboard(port: int = typer.Option(8501, "--port")) -> None:
-    """Launch the local Streamlit operator console."""
-    config, _ = ctx()
-    env = os.environ.copy()
-    env["PULSAR_HOME"] = str(config.root)
-    app_path = Path(__file__).resolve().parent / "dashboard" / "app.py"
-    raise typer.Exit(subprocess.call(
-        [sys.executable, "-m", "streamlit", "run", str(app_path), "--server.port", str(port)],
-        cwd=str(config.root), env=env,
-    ))
+def dashboard(
+    port: int = typer.Option(8787, "--port"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Loopback only unless you mean it."),
+    open_browser: bool = typer.Option(True, "--open/--no-open"),
+) -> None:
+    """Launch the local operator console."""
+    import webbrowser
+
+    from .webapp import serve
+
+    config, db = ctx()
+    db.initialize()
+    try:
+        httpd = serve(config, db, host=host, port=port)
+    except OSError as exc:
+        console.print(f"[red]Cannot bind {host}:{port}[/] — {exc}")
+        raise typer.Exit(1)
+    url = f"http://{'localhost' if host == '127.0.0.1' else host}:{port}/"
+    console.print(f"[bold]PULSAR console[/] → [cyan]{url}[/]  (ctrl-c to stop)")
+    if open_browser:
+        webbrowser.open(url)
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        console.print("stopped")
+    finally:
+        httpd.server_close()
 
 
 @app.command("import-ledger")
