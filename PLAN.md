@@ -5,7 +5,7 @@
 > **Repository:** `C:\Users\Galaxy\LEVI\projects\pulsar`
 > **Environment:** conda env `pegasus` (Python 3.11), Windows 11, RTX 4060 6 GB
 > **Engine version:** semantic engine 3.0.0 · DuckDB schema 4
-> **Last substantial revision:** 2026-09-06 (entity graph, build pipeline, outreach demoted to an application)
+> **Last substantial revision:** 2026-09-06 (declared sources, the record store, graph lineage, the Explore screen)
 
 This is the single source of truth for what PULSAR is, how it is built, why it is
 built that way, what is known to be wrong with it, and what to do next. It
@@ -182,6 +182,15 @@ src/pulsar_research/
   cli.py                       Typer CLI, grouped by subsystem
   config.py                    paths + config sections; secrets by env-var NAME only
   db.py                        DuckDB schema, forward-only migration, query helpers
+  sources/                     §5 — every way data enters, declared
+    model.py                   Source, Method, Access, RunOptions, Capture
+    registry.py                the five declared sources; describe() for CLI and console
+    runs.py                    journalled_run: one sync_runs row per capture
+  records/                     §7.4 — every dated, attributable fact, typed
+    model.py                   Record, Person, the closed set of families
+    lattes.py                  the Lattes object → records (prefix specs, per-family shapers)
+    sigaa.py                   SIGAA tables → courses, projects, monitoria
+    store.py                   bulk write, fingerprint, search, facets, people_around
   acquisition/
     sigaa_authenticated.py     Playwright/JSF automation (fragile; pinned by contract test)
     sigaa_public.py            orchestrates the public archiver + import
@@ -203,8 +212,8 @@ src/pulsar_research/
     engine.py                  orchestration: build_space, run_profile, persistence
   graph/                       §13
     model.py                   kinds, relations, endpoint rules, id minting
-    identity.py                name folding, accented-name recovery, alias resolution
-    project.py                 acquired facts → entities and edges
+    identity.py                name folding, citation-form merging, alias resolution
+    project.py                 records (or atoms, before records exist) → entities and edges
     store.py                   wholesale write, neighbourhoods, adjacency, rankings
   intelligence/
     metrics.py                 scientometrics: concentration, portfolio counts, collaboration
@@ -215,7 +224,8 @@ src/pulsar_research/
   webapp/
     server.py                  the console's HTTP layer; serves the built frontend
     payloads.py                every console read, as JSON
-    network.py                 the three faculty graphs the network view draws
+    explore.py                 the store over HTTP: records, portfolios, entities, one search
+    network.py                 the four faculty graphs the network view draws
     desktop.py                 the same console in a native window (pywebview)
     frontend/                  Vite + React + TypeScript sources
     static/                    the frontend build output (generated)
@@ -229,14 +239,54 @@ src/pulsar_research/
       outcomes.py              what came of each thread
       mailer.py                the only module that can send email
       templates/               subject/body Jinja2 + the HTML email theme
-tests/                         corpus, representations, skills, provenance, graph,
-                               measures, pipeline, SIGAA contract
+tests/                         corpus, representations, skills, provenance, sources,
+                               records, identity, graph, measures, pipeline, explore,
+                               SIGAA contract
 data/                          git-ignored; see §20
 ```
 
 ---
 
 ## 5. Data sources
+
+There are many of them, they are reached in unrelated ways, and more will come.
+The failure the previous layout invited was that "how data gets in" existed only
+as CLI verbs: `sync professors` knew the scraper, the scraper knew its tables,
+and nothing could answer "what does this need, what does it own, and when did it
+last run" without reading both. `sources/` makes acquisition a declaration.
+
+### 5.0 A source is declared, not implied
+
+`sources/model.py` defines the contract. A `Source` states its `id`, `title`,
+`provider`, a `method` — `browser_session` (a driven, logged-in browser),
+`http_crawl` (public pages), `embedded` (an object carried inside another
+source's capture), `file_import` (something on disk), `api` — an `access`
+level (public / authenticated / local), `why` it exists, the tables it
+**yields**, what it `depends_on`, the `secrets` it needs **by env-var name
+only**, its `config_section`, `rate`, `cost`, a `witness` (the table whose row
+count proves it ran) and a `changed` probe (does the input on disk differ from
+what was last imported). `run(db, config, options)` returns a `Capture` — rows
+per table, artifacts, notes, errors — and `runs.journalled_run` turns every
+capture into one `sync_runs` row under the source id. `reaches_network` is
+derived from the method, and it is the property the pipeline enforces: a source
+that reaches the network runs only when asked for by name.
+
+Five are declared in `sources/registry.py`:
+
+| id | method | yields | note |
+| --- | --- | --- | --- |
+| `sigaa.opportunities` | browser_session | `opportunities` | §5.1 |
+| `sigaa.professors` | http_crawl | `professors`, `professor_aliases`, `sigaa_public_*` | §5.2 |
+| `lattes.embedded` | embedded | `sigaa_public_lattes_documents`, `sigaa_public_lattes_flat` | re-imported from the archive, never crawled; depends on `sigaa.professors` |
+| `sigaa.applications` | browser_session | `applications` | §5.1 |
+| `ledger.file` | file_import | `opportunities` (from the JSON ledger) | `implicit=False` — never runs on the pipeline's own initiative |
+
+The pipeline's acquire stages are *generated* from this registry
+(`pipeline/registry._source_stages`), so adding a source is adding one entry:
+it appears in `pulsar sources list`, in `pipeline status`, in the console's
+Sources table, and in the journal, with nothing else touched. Readiness is
+computed, not asserted — a missing secret or `[sources.<id>] enabled = false`
+in config makes the source report *not ready* with the reason.
 
 ### 5.1 Authenticated SIGAA
 
@@ -277,7 +327,17 @@ acquired provenance. Never delete it to reclaim space.**
 
 Extracted from the embedded object, never re-fetched from CNPq. The flattened
 `sigaa_public_lattes_flat(siape, path, value_type, value_text)` table is the
-substrate for atom extraction (§7).
+substrate for atom extraction (§7) and for the record store (§7.4). It is its
+own source (`lattes.embedded`) because it has its own freshness: the archive on
+disk can be newer than what the canonical store imported, and re-importing it
+must not require re-crawling sixty-five faculty pages.
+
+### 5.4 What a new source must do
+
+Declare itself; own its tables; return a `Capture`; never send. Whether it is a
+CNPq API, a departmental spreadsheet, a second university's SIGAA or a
+Playwright session against something else, the registry entry is the whole
+integration surface. `tests/test_sources.py` pins the contract.
 
 ---
 
@@ -358,6 +418,46 @@ bigrams like `saude medicina`.
 records. The previous engine hashed only opportunities, so a professor/Lattes
 refresh silently left professor scores stale. That is now a detectable condition
 (§12).
+
+---
+
+### 7.4 The record store
+
+Atoms are what the semantic engine embeds: title-shaped text, one row per thing
+a professor has *said*. They discard exactly what a person reading a CV keeps —
+the year, the venue, the student, the institution, the board, the other names on
+the page. The archive holds 1.19 M flattened Lattes leaves and the console could
+reach a title list per person and nothing else.
+
+`records/` reads the same leaves into **one typed table of every dated,
+attributable fact**. A `Record` has a `family` from a closed set — `work`,
+`technical`, `project`, `line`, `career`, `activity`, `degree`, `training`,
+`committee`, `supervision`, `event`, `award`, `course`, `language`, `area` — a
+`form` within it (article, chapter, doctoral board, monitoria…), a `title`, a
+`year` (and `year_end`), a `status`, an `org` (institution, employer, granting
+body, publisher), a `venue` (journal, event, book), a `counterpart` — the one
+other person the record is about: the student, the advisor, the candidate — a
+`doi`, `language`, `nature` (the source's own qualifier), `keywords`, `areas`,
+a `payload` for whatever the family carries that nothing else does, and the
+`people` named on it with their `role` (author, member, team, responsible,
+student, advisor). `record_id` is `sha1(siape | family | source | source_ref)[:16]`,
+so a rebuild is a replacement and a stable link.
+
+`records/lattes.py` is a table of prefix specs — `producaobibliografica.artigos`,
+`producaotecnica.*`, `bancas.*`, `orientacoes.*` and so on — with a shaper per
+family; field lookup is a case-insensitive breadth-first search on the leaf
+names, because the object's nesting varies by CNPq export version but its leaf
+names do not. `records/sigaa.py` adds what only SIGAA knows: courses per term
+(the latest term marked *current*), pesquisa/extensão projects, monitoria.
+`records/store.py` writes in bulk from DataFrames (row-at-a-time DuckDB inserts
+made the build take minutes; it takes twenty seconds), fingerprints the inputs
+so the pipeline can tell whether the store is current, and answers the
+questions the console asks: search with filters, facets per family and per
+person, one record with its people resolved, everything about one professor,
+and `people_around` — the company a professor keeps, with the subject excluded.
+
+Live: 40,862 records naming 101,245 people-rows across 65 faculty. The store is
+a pipeline stage (`records.extract`) and the graph is built from it (§13.5).
 
 ---
 
@@ -763,14 +863,17 @@ inferring hundreds of merges is a build to look at.
 ### 13.2 The vocabulary
 
 `affiliated_with`, `part_of`, `authored`, `supervised`, `leads`, `offers`,
-`within`, `collaborates_with`, `about`, `uses`. Each declares which kinds it may
-join, and `Edge.validate()` raises rather than storing a relation that does not
-typecheck — a graph that accepts `work → authored → person` is a graph whose
-answers cannot be trusted in either direction.
+`within`, `collaborates_with`, `about`, `uses`, and — once records exist —
+`worked_at`, `trained_at`, `advised_by`, `supervises`, `examined`,
+`served_with`, `published_in`, with a `venue` kind to publish into. Each
+declares which kinds it may join, and `Edge.validate()` raises rather than
+storing a relation that does not typecheck — a graph that accepts
+`work → authored → person` is a graph whose answers cannot be trusted in either
+direction.
 
-`collaborates_with` is the only symmetric relation. It is stored once, in
-canonical id order, and expanded on read; storing both directions would make
-every degree twice what it is.
+`collaborates_with` and `served_with` are the symmetric relations. Each is
+stored once, in canonical id order, and expanded on read; storing both
+directions would make every degree twice what it is.
 
 Weight means whatever the relation means — co-authored papers, mentions, topic
 share — and is **never comparable across relations**. Two facts implying the same
@@ -824,6 +927,26 @@ appears once, on one paper, with someone outside their cluster has a bridging of
 and prints the degree beside the value, so a reader can see what the answer was
 computed over.
 
+### 13.5 What the records add
+
+When the record store is built, `_records()` in `graph/project.py` replaces
+the atom projection: works carry *every* author and their venue; projects,
+careers (`worked_at` an organisation, with years), degrees (`trained_at` an
+institution, `advised_by` a person), supervisions (`supervises` a student),
+boards (`examined` the candidate, `served_with` each fellow member) and
+co-authorship from papers and teams. Faculty co-authorship edges went from 150
+to 282 on the same archive, because the atoms had only ever seen the first
+author. The graph's freshness fingerprint is the corpus fingerprint joined to
+the record build's, so a rebuilt store makes the graph stale and nothing else
+does.
+
+`graph/identity.py` earns its name here. Lattes writes co-authors as
+`SURNAME, Given`, as `Given Surname`, and as initials, sometimes on the same
+page; `merge_names()` clusters spellings by (first initial, surname) with
+compatible token lists, and `PersonResolver` maps a citation form to a faculty
+member only when exactly one candidate fits. 25,595 spellings became 17,559
+people. The resolver infers narrowly and says how often it did (D49).
+
 ---
 
 ## 14. The build pipeline
@@ -840,12 +963,18 @@ and how to tell whether its output still reflects its inputs. The runner does th
 ordering.
 
 ```text
-acquire.opportunities ──┬── acquire.professors ──┬── intelligence.metrics ──┐
-                        │                        │                          ├── graph.project ── graph.metrics
-                        │                        └── semantics.space ───────┘
+acquire.ledger (explicit only)
+acquire.opportunities ──┬── acquire.professors ──┬── intelligence.metrics ───────┐
+                        │                        ├── acquire.lattes ── records.extract ── graph.project ── graph.metrics
+                        │                        └── semantics.space ──────────┘
                         │                                   └── semantics.profile
                         └── acquire.applications
 ```
+
+The `acquire.*` stages are generated from the source registry (§5.0), one per
+declared source, in dependency order; `records.extract` reads the archive into
+the record store (§7.4) and is stale whenever the store's input fingerprint
+moves.
 
 Freshness is derived from the store, never from a timestamp file. A stage is
 stale when what it wrote disagrees with what it read — which survives someone
@@ -895,7 +1024,8 @@ subsystem.
 run/entity/facet/channel/score/percentile), `entity_geometry`, `semantic_topics`
 (with `parent_id`/`depth`), `entity_topics`, `entity_skills`, `professor_evidence`
 (with `scope`), `semantic_benchmarks`, `map_diagnostics`, `professor_metrics`,
-`collaboration_edges`, `global_metrics`, `embedding_cache`, and the graph:
+`collaboration_edges`, `global_metrics`, `embedding_cache`; the record store:
+`records`, `record_people`, `record_builds`; and the graph:
 `graph_entities`, `graph_edges`, `entity_metrics` (tall:
 entity/metric/value/extra), `graph_builds`.
 
@@ -929,9 +1059,21 @@ adding a channel a zero-migration change.
 
 ## 16. CLI
 
-Grouped by subsystem: `sync`, `semantics`, `graph`, `pipeline`, `opportunities`,
-`professors`, `campaign`, `applications`, plus `init`, `doctor`, `dashboard`,
-`import-ledger`.
+Grouped by subsystem: `sources`, `sync`, `records`, `semantics`, `graph`,
+`pipeline`, `opportunities`, `professors`, `campaign`, `applications`, plus
+`init`, `doctor`, `dashboard`, `import-ledger`.
+
+`sources list` prints every declared source with its method, readiness and
+last journalled run; `sources show <id>` explains one — what it needs, what it
+owns, what it depends on; `sources run <id>` runs it and journals the capture;
+`sources history <id>` is the journal. `sync opportunities|professors|
+applications|all` still works and routes through the same registry.
+
+`records build` reads the archive into the record store; `status` reports the
+build and whether it is current; `search` takes the console's filters at the
+terminal; `show <id>` prints one record with the people on it; `people <who>`
+lists the company a professor keeps. Any command that takes a professor
+accepts a SIAPE or a name fragment and refuses an ambiguous one.
 
 `pipeline status` is the one to reach for when something looks wrong upstream: it
 prints every declared stage, its state, and why — `--why` adds what each stage is
@@ -976,9 +1118,10 @@ never reached the other six:
   `useProfessor(siape)`, never for a URL, so a payload that moves cannot leave a
   stale path buried three files deep.
 - `components/` — the shared vocabulary: table, meter, chip, tabs, the four SVG
-  charts, and the three **records** (a supervisor, a work plan, a message). A
-  supervisor is the same record whether reached from a ranking, the map, or a
-  co-authorship edge.
+  charts, and the **records** (a supervisor, a work plan, a message, and from
+  `components/records/store.tsx` a stored record, an entity, a search). A
+  supervisor is the same record whether reached from a ranking, the map, a
+  co-authorship edge, or an author line on a paper.
 - `components/Rail.tsx` — the stack that opens a record *over* the screen you
   are on. Clicking something must not route you somewhere else and discard the
   filters, the scroll position, the map's camera and the layout the graph spent
@@ -1002,21 +1145,36 @@ screen keeps its state in the URL, so a view is linkable and survives a reload.
   side-by-side record with a per-channel ranking breakdown, topics and skills.
 - **Professors** — ranked by *current supervision capacity* or *research
   trajectory*, with an evidence panel showing each atom's kind, year, match,
-  specificity and recency.
+  specificity and recency. The record opens three further tabs from the store:
+  **Portfolio** (every record, a years-by-family timeline, filter by family),
+  **People** (the company they keep — co-authors, students, fellow board
+  members — each opening as faculty or as a node), and **Career** (appointments,
+  degrees, training, as a dated list).
+- **Explore** — the store, searchable. Forty thousand records, one row each:
+  a paper with its venue, a board with its candidate, a student by name, an
+  appointment with its years, a course with its term. Narrow by family and kind,
+  professor, years, a person named on it, an institution, or any words; open one
+  and keep going — to the professor, to a co-author, to the institution, to the
+  journal — in the rail, without leaving. Search here is substring on purpose:
+  this screen finds a record someone half-remembers; ranking by meaning is the
+  semantic engine's job. The command palette asks the same server search, so a
+  journal, an institution or a stranger's name is reachable from any screen.
 - **Landscape** — the map, coloured by whichever question is being asked (field,
   fit, funding, campaign reach), with its stress and rank correlations stated
   inline, and a rail whose field and technique bars double as the filters that
   isolate them.
-- **Network** — the faculty as a graph, over three switchable edge semantics
-  (co-authorship, shared technique, shared subject) that disagree in useful ways,
+- **Network** — the faculty as a graph, over four switchable edge semantics
+  (co-authorship, shared technique, shared subject, and *committees* — who has
+  sat on a board with whom, 276 ties among 65) that disagree in useful ways,
   read from the entity graph and carrying its structural measures. Detail
   in §17.1.
 - **Outreach** — audiences, per-recipient drafts, and the state of every
   conversation. It never sends: that stays at a terminal, behind `--confirm`.
 - **Semantic engine** — benchmarks (with a plain-language note per task), map
   fidelity, topic-quality curves over k, both provenance identities, and
-  **freshness**: every declared pipeline stage, its state, why, and what
-  re-running it would invalidate. Six screens report numbers derived from a
+  **freshness**: every declared source with how it is reached, whether it is
+  ready and when it last ran, then every declared pipeline stage, its state,
+  why, and what re-running it would invalidate. Six screens report numbers derived from a
   store somebody scraped at some point; until this tab existed, "is this the
   ranking from before or after the last sync" was answered by remembering. The
   console shows it and never runs it — a scrape a browser tab can start is an
@@ -1202,8 +1360,12 @@ while the dashboard is open on the same database.
 | CLI rebuild | **done** |
 | Dashboard rebuild | **done** |
 | Campaign snapshot + HTML rendering + dry-run send | **done** |
-| Test suite | **done** — 42 tests |
+| Test suite | **done** — 262 tests |
 | Acquisition journal (`sync_runs`) | **done** — every sync entry point records start, finish, status and details, including failures; `doctor` shows the latest per source |
+| Declared sources (`sources/`) | **done** — five sources, contract pinned; acquire stages generated from the registry; `sources` CLI group; console Sources table |
+| Record store (`records/`) | **done** — 40,862 typed records, 101,245 people rows; `records.extract` stage; `records` CLI group |
+| Graph from records + identity merging | **done** — venues, careers, lineage, boards; 41,776 entities, 127,012 edges; 25,595 spellings → 17,559 people |
+| Explore screen + portfolio/people/career tabs + committees network | **done** — verified in the browser against the live store |
 | Delivery path | **done** — verified against an in-process SMTP sink |
 | End-to-end verification | **done** — `init` migration, `semantics build` (space + topics + landscape + skills + 7-task battery + profile run + metrics), `doctor`, ranked opportunity/professor views, audience → campaign → preview → dry-run send, all 21 dashboard queries, Streamlit serving |
 | Live SIGAA regression against the portal | **not re-run this session** (§22) |
@@ -1639,6 +1801,50 @@ Two coincident nodes have no direction to separate along, and the invented one
 came from `Math.random()`. It fires rarely, but rarely is enough for the same
 data to draw two different graphs and for a regression check to flake. The
 direction now comes from the pair's positions in the array.
+
+**D52 — A source is a declaration, and acquisition stages are generated from it.**
+"How does data get in" was a set of CLI verbs, each of which knew one scraper.
+The registry (§5.0) states method, access, secrets by env-var name, yields,
+dependencies, cost and a witness; the pipeline, the CLI, the journal and the
+console all read the same entry. The property that matters is enforced from
+the method rather than remembered: a source that reaches the network never runs
+on the pipeline's own initiative. `ledger.file` goes further — `implicit=False`
+— because importing a ledger over a live store is an operator's decision.
+
+**D53 — Records are one typed table, not one table per family.**
+Fourteen families with unrelated columns argue for fourteen tables; the console
+argues the other way. Every screen that touches the store wants the same five
+questions — what, when, whose, who else, where — and a tall table with a closed
+`family` and a per-family `details` JSON answers them with one query, one facet
+call and one rail frame. A family is a row, as a channel is a row in
+`entity_scores` and a measure is a row in `entity_metrics` (§15).
+
+**D54 — The graph is projected from records when they exist, from atoms when
+they do not.** Atoms see the first author and no year; records see every name,
+the venue, the board and the advisor. Building the graph from records nearly
+doubled faculty co-authorship on an unchanged archive. The atom projection stays
+as the fallback so a store without a record build is still a graph, and the
+graph's fingerprint carries the record build's so the two cannot drift apart
+silently.
+
+**D55 — Co-author spellings are merged by evidence, faculty by uniqueness.**
+Three spellings of one person are three nodes and a third of the degree each.
+`merge_names` joins spellings that share a first initial and surname and whose
+remaining tokens are compatible; a citation form resolves to a faculty member
+only when exactly one fits. Ambiguity stays as two nodes rather than becoming
+one wrong one, and the resolver reports how often it inferred.
+
+**D56 — Exploring the store is substring search; ranking by meaning stays with
+the engine.** The Explore screen exists to find a record someone half-remembers
+— a journal name, a student's surname, a year. Semantic ranking there would
+reorder a list the operator is scanning by eye and hide exact matches behind
+thematic ones. The two are different questions and live on different screens.
+
+**D57 — Bulk writes go through registered DataFrames.** DuckDB's `executemany`
+is row-at-a-time; a 100 k-row people table took minutes and the graph build two
+and a half. Registering a DataFrame and `INSERT … SELECT` from it made the record
+build twenty seconds and the graph build twenty-six. The fix is in `records/store.py`
+and `graph/store._bulk`; nothing else should insert in a loop.
 
 ---
 

@@ -84,7 +84,9 @@ literal recall and thematic affinity have different winners.
 
 ```powershell
 pulsar doctor                       # config, credentials, corpus freshness, embedding service
+pulsar sources list                 # every way data gets in: method, readiness, last run
 pulsar sync all                     # acquire everything, then rebuild semantics
+pulsar records build                # read the archive into the typed record store
 pulsar semantics build              # fit the semantic space + benchmark + score
 pulsar semantics profile            # re-score after editing config/profile.yaml
 pulsar semantics status             # active space/run, benchmarks, map fidelity, topics
@@ -156,11 +158,29 @@ floor and prints the degree beside the value.
 
 ## Acquisition
 
+Every way data enters is a declared *source* — how it is reached (a driven
+browser, a public crawl, an object embedded in that crawl, a file on disk), what
+it needs from the operator (secrets by env-var name only), and what tables it
+owns. The pipeline's acquire stages, the console's Sources table and the journal
+all read the same declaration.
+
+```powershell
+pulsar sources list                 # sigaa.opportunities, sigaa.professors, lattes.embedded, …
+pulsar sources show lattes.embedded # what it needs, owns and depends on
+pulsar sources run sigaa.professors # run one and journal the capture
+pulsar sources history sigaa.professors
+```
+
+The `sync` verbs are still there and route through the same registry:
+
 ```powershell
 pulsar sync opportunities   # authenticated SIGAA discovery + detail backfill (never applies)
 pulsar sync professors      # public faculty pages + embedded Lattes, archived and imported
 pulsar sync applications    # authoritative "Meus Registros de Interesse" state
 ```
+
+A source that reaches the network runs only when asked for by name — never
+because something downstream went stale.
 
 Reading and mutating SIGAA are separate operations. Discovery cannot apply to
 anything. Applying is one opportunity at a time and requires `--confirm`:
@@ -192,6 +212,22 @@ pulsar campaign send <id> --confirm   # actually sends the selected drafts
 
 Messages are sent exactly as stored — templates are never re-rendered at send
 time — and anything already marked `sent` is never sent twice.
+
+## The record store
+
+The archive holds 1.2 M flattened Lattes leaves. `records build` reads them,
+plus the SIGAA tables, into one typed table of every dated, attributable fact —
+papers with their venue and every author, boards with their candidate, students
+by name, appointments with years, degrees with advisor and institution, courses
+per term — and the graph is then built from those records, so it knows venues,
+careers, lineage and who has sat on a board with whom.
+
+```powershell
+pulsar records status               # is the store built, and is it current
+pulsar records search sepse --family work --since 2019
+pulsar records people "melo"        # the company one professor keeps
+pulsar graph build                  # project the records into the entity graph
+```
 
 ## Data layout
 
@@ -226,10 +262,19 @@ npm run build      # rebuild ../static — commit the result
 Run `pulsar dashboard` in another terminal while `npm run dev` is up: the dev
 server proxies the API to it, so both halves are live at once.
 
-The **Semantic engine** screen has a *Freshness* tab: every pipeline stage, its
-state, and what re-running it would invalidate — the same table `pulsar pipeline
-status` prints. The console shows it and never runs it; acquisition stays at a
-terminal behind `--acquire`.
+**Explore** is the store, searchable: forty thousand records, one row each,
+narrowed by family, kind, professor, years, a person named on it, an institution
+or any words; open one and keep going — to the professor, a co-author, the
+institution, the journal — in the rail, without leaving the screen. A
+professor's record carries **Portfolio**, **People** and **Career** tabs from the
+same store, the network has a *committees* mode, and the command palette
+searches records, journals and institutions from any screen.
+
+The **Semantic engine** screen has a *Freshness* tab: every declared source, its
+readiness and last run; then every pipeline stage, its state, and what re-running
+it would invalidate — the same tables `pulsar sources list` and `pulsar pipeline
+status` print. The console shows them and never runs them; acquisition stays at
+a terminal behind `--acquire`.
 
 ### As a window rather than a tab
 
@@ -263,5 +308,7 @@ npm run layout:check
 ```
 
 The suite covers the corpus model, representation determinism, fusion algebra,
-the skill taxonomy, provenance identity separation, staleness detection, and a
-contract test pinning the fragile SIGAA literals.
+the skill taxonomy, provenance identity separation, the source contract, record
+extraction, name merging, the graph projection, staleness detection, the
+console's serving contract, and a contract test pinning the fragile SIGAA
+literals.
