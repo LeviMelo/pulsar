@@ -253,6 +253,15 @@ what you want.
 pytest
 ```
 
+The console's force layout has its own check, because its failure mode is
+silent — a graph always looks like a graph, even when the frame rather than the
+data is deciding where nodes sit:
+
+```powershell
+cd src/pulsar_research/webapp/frontend
+npm run layout:check
+```
+
 The suite covers the corpus model, representation determinism, fusion algebra,
 the skill taxonomy, provenance identity separation, staleness detection, and a
 contract test pinning the fragile SIGAA literals.

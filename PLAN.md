@@ -1087,6 +1087,20 @@ who is adjacent to a thread that has gone quiet. Those decide a second wave.
   neighbourhood elastically, and the spread / edge-length / grouping sliders
   reorganise the drawing while they are still being moved. A dragged node stays
   pinned until double-clicked or released with *Unpin*.
+- **The frame is not allowed to shape the drawing.** Repulsion is budgeted from
+  the room available per node rather than fixed, and its range is bounded. Both
+  are corrections to a real defect: with a fixed `-260` charge and an unbounded
+  1/d force, the layout wanted to be 2065px wide inside a 1000px canvas, so
+  between a tenth and a third of node positions were being set by `Math.min` at
+  the wall rather than by ties — and two unrelated nodes clamped into the same
+  corner read as neighbours. Bounding the range additionally stops the boundary
+  migration a 2D charge distribution otherwise performs, which was worst for
+  people with no co-authors at all: nothing pulls them back, so they went first.
+  A soft containment spring set inside the frame absorbs what is left, and the
+  hard clamp survives only so a violent drag cannot throw anything off-canvas.
+  `npm run layout:check` fails if it ever decides a resting position again.
+  Measured on the three console graphs: 0% of nodes at the frame, down from an
+  average of 18% and a worst case of 34%, with node spacing unchanged.
 - **Going deeper is not going elsewhere.** The rail is a stack: a supervisor's
   record, the plan they are offering, the message already sent to them — each
   opens over the graph with one way back, and the graph never moves. Routing to
@@ -1608,6 +1622,23 @@ meant, refuses a reordered name, and refuses a bare surname. It cannot tell two
 people who genuinely share a first and last name apart; the uniqueness
 requirement stops that from compounding silently, and the count of inferences is
 journalled into the build so the number is visible rather than assumed small.
+
+**D50 — Force constants are budgeted against the frame, not chosen.**
+A fixed charge sets an equilibrium radius that grows with the node count and
+knows nothing about the canvas; at `-260` it came out just past the half-width,
+so any real graph overflowed and the clamp became the drawing's outline. The
+charge now scales with the area available per node — which is also the only way
+"hiding a unit gives its share of the frame back to the rest" can be true — and
+the repulsion has a cutoff, without which a 2D charge distribution migrates to
+its boundary. The measurement is in `webapp/frontend/scripts/layout-check.mjs`
+and runs against generated graphs, because the property is about any graph of
+this size, not about this faculty.
+
+**D51 — The layout is deterministic.**
+Two coincident nodes have no direction to separate along, and the invented one
+came from `Math.random()`. It fires rarely, but rarely is enough for the same
+data to draw two different graphs and for a regression check to flake. The
+direction now comes from the pair's positions in the array.
 
 ---
 

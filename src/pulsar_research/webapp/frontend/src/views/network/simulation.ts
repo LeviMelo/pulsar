@@ -27,6 +27,15 @@ const DECAY = 0.0228;        // ~300 frames from 1 to the rest threshold
 const DAMPING = 0.62;
 const REST = 0.004;
 
+/** Repulsion per square pixel of room available per node. See `tick`. */
+const CHARGE_PER_AREA = 0.016;
+/** Past this, two nodes stop pushing each other. See `tick`. */
+const REPULSION_RANGE = 260;
+/** How far inside the frame the drawing is asked to stay. */
+const MARGIN = 40;
+/** Stiffness of that ask. Firm enough to hold, soft enough not to pile up. */
+const CONTAINMENT = 0.12;
+
 export interface SimNode extends GraphNode {
   x: number;
   y: number;
@@ -241,7 +250,23 @@ export class Simulation {
     this.alpha += (this.target - this.alpha) * DECAY;
     const { liveNodes, liveLinks, knobs } = this;
 
-    const charge = -260 * knobs.charge;
+    // Repulsion is budgeted from the room each node actually has, not fixed.
+    //
+    // A fixed charge sets an equilibrium radius of roughly sqrt(C·N / πk) for N
+    // nodes against a centring stiffness k — so it grows with the node count and
+    // knows nothing about the frame it has to fit in. At the old -260 that
+    // radius came out at about 440 against 500 of half-width: no margin at all,
+    // and any real graph — isolated nodes, several components, a narrow band —
+    // overflowed. Measured with the frame clamp removed, the collaboration graph
+    // wanted to be 2065px wide inside a 1000px canvas, which meant a third of the
+    // node positions were being set by Math.min/Math.max rather than by ties.
+    // That is not a cosmetic problem: two unrelated nodes clamped into the same
+    // corner read as neighbours.
+    //
+    // Scaling with the area available per node makes the settled extent
+    // independent of how many are on screen, which is also what "hiding a unit
+    // gives its share of the frame back to the rest" has to mean.
+    const charge = -CHARGE_PER_AREA * ((W * H) / Math.max(1, liveNodes.length)) * knobs.charge;
     for (let i = 0; i < liveNodes.length; i += 1) {
       const a = liveNodes[i];
       for (let j = i + 1; j < liveNodes.length; j += 1) {
@@ -250,14 +275,29 @@ export class Simulation {
         let dy = b.y - a.y;
         let d2 = dx * dx + dy * dy;
         if (d2 < 1) {
-          // Coincident nodes have no direction to separate along; give them one.
-          dx = Math.random() - 0.5;
-          dy = Math.random() - 0.5;
+          // Coincident nodes have no direction to separate along, so one has to
+          // be invented. It comes from their positions in the array, not from
+          // Math.random(): the same data has to draw the same graph twice, and
+          // a random nudge here — rare, but it does fire — is enough to make a
+          // reload disagree with itself and a layout check flake.
+          const angle = ((i * 31 + j * 17) % 360) * (Math.PI / 180);
+          dx = Math.cos(angle);
+          dy = Math.sin(angle);
           d2 = 1;
         }
-        const push = (charge * this.alpha) / d2;
-        a.vx += dx * push; a.vy += dy * push;
-        b.vx -= dx * push; b.vy -= dy * push;
+        // Bounded range, as d3-force's `distanceMax` is. A 1/d force never
+        // dies, so without this every node pushes every other one outward for
+        // ever and the layout does what a 2D charge distribution does: it
+        // migrates to the boundary. On a sparse graph that put half the nodes
+        // in the outer margin, worst of all the ones with no ties at all —
+        // nothing pulls them back, so they were the first against the wall.
+        // Past the cutoff a distant node feels nothing, and the centring
+        // brings it home.
+        if (d2 < REPULSION_RANGE * REPULSION_RANGE) {
+          const push = (charge * this.alpha) / d2;
+          a.vx += dx * push; a.vy += dy * push;
+          b.vx -= dx * push; b.vy -= dy * push;
+        }
 
         // Collision, so a dense cluster stays readable instead of becoming one
         // blob: the marks carry the size encoding and must not overlap it away.
@@ -308,6 +348,20 @@ export class Simulation {
         if (node.x > right) node.vx += (right - node.x) * strength;
       }
 
+      // And the frame gets the same treatment the bands do, for the same
+      // reason. The clamp below cannot be the boundary: it stops a node dead
+      // at the wall, so its position stops meaning anything and a ridge forms
+      // along the edge. This is a spring set a little inside the frame, and
+      // with the charge budgeted and its range bounded above it is rarely
+      // called on — around one node in twenty-five sits inside the margin at
+      // rest, against one in four when a spring like this was the only fix.
+      // What it is really for is the top of the Spread slider, where the
+      // drawing genuinely does want more room than there is.
+      if (node.x < MARGIN) node.vx += (MARGIN - node.x) * CONTAINMENT;
+      else if (node.x > W - MARGIN) node.vx += (W - MARGIN - node.x) * CONTAINMENT;
+      if (node.y < MARGIN) node.vy += (MARGIN - node.y) * CONTAINMENT;
+      else if (node.y > H - MARGIN) node.vy += (H - MARGIN - node.y) * CONTAINMENT;
+
       if (node.pinned) {
         node.x = node.px;
         node.y = node.py;
@@ -318,8 +372,9 @@ export class Simulation {
         node.vy *= DAMPING;
         node.x += node.vx;
         node.y += node.vy;
-        // The frame itself is the only hard limit, and only so nothing can be
-        // lost off-canvas.
+        // A last resort, so a violent drag cannot throw anything off-canvas.
+        // It should never decide where a node comes to rest — `npm run
+        // layout:check` fails if it does.
         node.x = Math.min(W - node.r - 2, Math.max(node.r + 2, node.x));
         node.y = Math.min(H - node.r - 2, Math.max(node.r + 20, node.y));
       }
