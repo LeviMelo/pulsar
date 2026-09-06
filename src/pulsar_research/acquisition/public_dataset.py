@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import Sequence
 
 from ..db import Database, utcnow
 from .ledger import normalize_name, resolve_opportunity_professors
@@ -29,21 +30,34 @@ def _extract_summary(curriculo_json: str) -> str:
         return ""
 
 
-def import_public_dataset(db: Database, dataset_dir: Path) -> dict[str, int]:
+def import_public_dataset(db: Database, dataset_dir: Path,
+                          only: Sequence[str] | None = None) -> dict[str, int]:
+    """Copy the scraper's standalone DuckDB into the canonical store.
+
+    With `only`, just those archive tables are re-read and the professor
+    registry is left alone — that is how the embedded Lattes source refreshes
+    its tables from disk without pretending a crawl happened.
+    """
     src_db = dataset_dir / "sigaa_ufal.duckdb"
     if not src_db.exists():
         raise FileNotFoundError(f"Public SIGAA dataset DB not found: {src_db}")
+    tables = list(only) if only else PUBLIC_TABLES
+    unknown = set(tables) - set(PUBLIC_TABLES)
+    if unknown:
+        raise ValueError(f"not archive tables: {sorted(unknown)}")
     stats: dict[str, int] = {}
     now = utcnow()
     with db.connect() as con:
         safe = str(src_db.resolve()).replace("'", "''")
         con.execute(f"ATTACH '{safe}' AS pub (READ_ONLY)")
         try:
-            for table in PUBLIC_TABLES:
+            for table in tables:
                 target = f"sigaa_public_{table}"
                 con.execute(f'DROP TABLE IF EXISTS "{target}"')
                 con.execute(f'CREATE TABLE "{target}" AS SELECT * FROM pub."{table}"')
                 stats[target] = int(con.execute(f'SELECT COUNT(*) FROM "{target}"').fetchone()[0])
+            if only:
+                return stats
 
             prof_rows = con.execute(
                 "SELECT siape,name,department,status,profile_url,photo_url,lattes_id,lattes_update_date,lattes_update_time,professor_json_path FROM pub.professors"

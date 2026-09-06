@@ -88,9 +88,13 @@ def _last_sync(db: Database, source: str, *, witness: str = "") -> Freshness:
     would cascade every derived stage into `blocked` on a store that is in fact
     complete. The honest answer there is that we do not know when it arrived.
     """
+    # Runs journalled before sources had ids sit under the bare stage suffix
+    # ("professors"); reading both keeps a long-lived store from reporting
+    # "never" for a corpus it plainly holds.
+    legacy = source.rsplit(".", 1)[-1]
     rows = db.query_df(
-        "SELECT status, finished_at FROM sync_runs WHERE source=? "
-        "ORDER BY finished_at DESC LIMIT 1", [source])
+        "SELECT status, finished_at FROM sync_runs WHERE source IN (?, ?) "
+        "ORDER BY finished_at DESC LIMIT 1", [source, legacy])
     if not len(rows):
         if witness and db.table_exists(witness):
             count = int(db.scalar(f'SELECT COUNT(*) FROM "{witness}"', default=0) or 0)
@@ -166,25 +170,57 @@ def _rows_probe(table: str, label: str, *, depends_on_corpus: bool = False):
 # ---------------------------------------------------------------------------
 
 
-def _acquire_opportunities(config: AppConfig, db: Database) -> Any:
-    from ..acquisition.sigaa_authenticated import sync_opportunities
-    return sync_opportunities(config)
+def _source_stages() -> tuple[Stage, ...]:
+    """One stage per declared source, so acquisition is never listed twice."""
+    from ..sources import SOURCES, RunOptions, journalled_run
+    from ..sources.registry import BY_ID
+
+    stages = []
+    for source in SOURCES:
+        def run(config: AppConfig, db: Database, *, _s=source) -> Any:
+            return journalled_run(config, db, _s, RunOptions()).as_dict()
+
+        def fresh(db: Database, *, _s=source) -> Freshness:
+            base = _last_sync(db, _s.id, witness=_s.witness)
+            if not _s.implicit and base.state == "never":
+                return Freshness("unknown", f"never imported; `pulsar sources run {_s.id}`")
+            if _s.changed is not None and base.state == "ok":
+                try:
+                    reason = _s.changed(AppConfig.load(), db)
+                except Exception:      # a probe must not take the pipeline down
+                    reason = None
+                if reason:
+                    return Freshness("stale", reason, base.at)
+            return base
+
+        stages.append(Stage(
+            name=source.stage,
+            title=source.title,
+            why=source.why,
+            produces=source.yields,
+            depends_on=tuple(BY_ID[d].stage for d in source.depends_on),
+            acquires=source.reaches_network,
+            run=run,
+            freshness=fresh,
+        ))
+    return tuple(stages)
 
 
-def _acquire_professors(config: AppConfig, db: Database) -> Any:
-    from ..acquisition.ledger import export_professors_csv_for_scraper, resolve_opportunity_professors
-    from ..acquisition.sigaa_public import sync_professors
-    seed = config.paths.professors_csv
-    if int(db.scalar("SELECT COUNT(*) FROM opportunities", default=0) or 0):
-        export_professors_csv_for_scraper(db, seed)
-    result = sync_professors(config, input_csv=seed)
-    resolve_opportunity_professors(db)
-    return result
+def _build_records(config: AppConfig, db: Database) -> Any:
+    from ..records import build
+    return build(db)
 
 
-def _acquire_applications(config: AppConfig, db: Database) -> Any:
-    from ..acquisition.sigaa_authenticated import sync_applications
-    return sync_applications(config)
+def _records_fresh(db: Database) -> Freshness:
+    from ..records.store import fingerprint, last_build
+    build = last_build(db)
+    if build is None:
+        return Freshness("never", "the archive has never been read into records")
+    at = str(build.get("created_at") or "")
+    if build.get("fingerprint") != fingerprint(db):
+        return Freshness("stale", "acquisition changed since the records were extracted", at)
+    stats = build.get("stats") or {}
+    return Freshness("ok", f"{int(stats.get('records', 0)):,} records extracted {at[:16]}", at)
 
 
 def _build_space(config: AppConfig, db: Database) -> Any:
@@ -258,37 +294,17 @@ def _build_graph_metrics(config: AppConfig, db: Database) -> Any:
 # ---------------------------------------------------------------------------
 
 STAGES: tuple[Stage, ...] = (
+    *_source_stages(),
     Stage(
-        name="acquire.opportunities",
-        title="Authenticated SIGAA opportunities",
-        why="The open calls and their work plans. Everything downstream that "
-            "mentions a position starts here.",
-        produces=("opportunities", "projects"),
-        acquires=True,
-        run=_acquire_opportunities,
-        freshness=lambda db: _last_sync(db, "opportunities", witness="opportunities"),
-    ),
-    Stage(
-        name="acquire.professors",
-        title="Public professor corpus and Lattes",
-        why="Portfolios, co-authorship and the accented spelling of every name. "
-            "Seeded from the opportunities, so it runs after them.",
-        produces=("professors", "sigaa_public_*"),
-        depends_on=("acquire.opportunities",),
-        acquires=True,
-        run=_acquire_professors,
-        freshness=lambda db: _last_sync(db, "professors", witness="professors"),
-    ),
-    Stage(
-        name="acquire.applications",
-        title="Registered interest",
-        why="The authoritative record of what has actually been applied to, "
-            "which no derivation can reconstruct.",
-        produces=("applications",),
-        depends_on=("acquire.opportunities",),
-        acquires=True,
-        run=_acquire_applications,
-        freshness=lambda db: _last_sync(db, "applications", witness="applications"),
+        name="records.extract",
+        title="Records from the archive",
+        why="Every work, appointment, degree, board, student, event and course, "
+            "read out of the Lattes object and the public tables into one typed "
+            "table. This is what makes the archive searchable.",
+        produces=("records", "record_people"),
+        depends_on=("acquire.lattes", "acquire.professors"),
+        run=_build_records,
+        freshness=_records_fresh,
     ),
     Stage(
         name="semantics.space",
@@ -297,7 +313,7 @@ STAGES: tuple[Stage, ...] = (
             "the moment the corpus changes, because its identity includes the "
             "corpus fingerprint.",
         produces=("semantic_spaces", "semantic_topics", "entity_geometry"),
-        depends_on=("acquire.opportunities", "acquire.professors"),
+        depends_on=("acquire.opportunities", "acquire.lattes"),
         run=_build_space,
         freshness=_space_fresh,
     ),
@@ -317,7 +333,7 @@ STAGES: tuple[Stage, ...] = (
         why="Counting facts — funded slots, publication counts, collaboration "
             "pairs — computed from the atom corpus rather than by regex.",
         produces=("professor_metrics", "collaboration_edges", "global_metrics"),
-        depends_on=("acquire.professors",),
+        depends_on=("acquire.lattes",),
         run=_build_metrics,
         freshness=_rows_probe("professor_metrics", "portfolio metrics"),
     ),

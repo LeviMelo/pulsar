@@ -39,6 +39,10 @@ def test_only_the_stages_that_reach_the_network_are_marked_as_acquiring():
     """The flag is what stops a recomputation from turning into a crawl."""
     assert {s.name for s in reg.STAGES if s.acquires} == {
         "acquire.opportunities", "acquire.professors", "acquire.applications"}
+    # The local ones — re-reading an archive, importing a file — are stages
+    # too, but they can run without being asked twice.
+    assert {s.name for s in reg.STAGES if s.name.startswith("acquire.") and not s.acquires} == {
+        "acquire.lattes", "acquire.ledger"}
 
 
 # ---------------------------------------------------------------------------

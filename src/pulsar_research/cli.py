@@ -20,7 +20,6 @@ import os
 import subprocess
 import sys
 import unicodedata
-from uuid import uuid4
 from pathlib import Path
 from typing import Optional
 
@@ -33,7 +32,11 @@ from .db import Database, json_load, json_text, utcnow
 
 app = typer.Typer(help="PULSAR — local research intelligence and opportunity prospecting",
                   no_args_is_help=True)
-sync_app = typer.Typer(help="Acquire and normalize source data", no_args_is_help=True)
+sync_app = typer.Typer(help="Acquire source data (shorthand for `sources run`)", no_args_is_help=True)
+sources_app = typer.Typer(help="Where data comes from: list, inspect and run declared sources",
+                          no_args_is_help=True)
+records_app = typer.Typer(help="The archive, read: search and inspect every extracted record",
+                          no_args_is_help=True)
 sem_app = typer.Typer(help="Semantic space, profile runs, benchmarks and search", no_args_is_help=True)
 prof_app = typer.Typer(help="Professor intelligence", no_args_is_help=True)
 opp_app = typer.Typer(help="Opportunity intelligence", no_args_is_help=True)
@@ -45,6 +48,8 @@ graph_app = typer.Typer(help="The entity graph: structure, neighbourhoods and pa
 pipeline_app = typer.Typer(help="What is stale, what would run, and running it",
                            no_args_is_help=True)
 app.add_typer(sync_app, name="sync")
+app.add_typer(sources_app, name="sources")
+app.add_typer(records_app, name="records")
 app.add_typer(sem_app, name="semantics")
 app.add_typer(prof_app, name="professors")
 app.add_typer(opp_app, name="opportunities")
@@ -115,28 +120,17 @@ def _smtp_summary(config: AppConfig) -> str:
     return f"[green]ready[/green] {where} — {detail}"
 
 
-def _sync(db: Database, source: str, operation):
-    """Run one acquisition step and journal it into `sync_runs`, either way.
-
-    A crawl that died halfway is the run you most want a record of, so the
-    failure path writes its row before re-raising.
-    """
-    run_id = uuid4().hex[:12]
+def _sync(db: Database, stage: str, operation):
+    """Run one derived step by hand and journal it the way the pipeline would."""
+    from .pipeline.registry import BY_NAME
+    from .pipeline.runner import _journal
     started = utcnow()
-
-    def journal(status: str, details: dict) -> None:
-        with db.connect() as con:
-            con.execute(
-                "INSERT INTO sync_runs (run_id, source, started_at, finished_at, status, details_json) "
-                "VALUES (?,?,?,?,?,?)",
-                [run_id, source, started, utcnow(), status, json_text(details)])
-
     try:
         result = operation()
     except Exception as exc:
-        journal("failed", {"error": f"{type(exc).__name__}: {exc}"})
+        _journal(db, BY_NAME[stage], started, {"status": "failed", "detail": f"{type(exc).__name__}: {exc}"})
         raise
-    journal("ok", result if isinstance(result, dict) else {"result": str(result)})
+    _journal(db, BY_NAME[stage], started, {"status": "ok", "result": result})
     return result
 
 
@@ -298,65 +292,289 @@ def import_ledger_cmd(path: Optional[Path] = typer.Option(None, "--path")) -> No
 
 
 # ---------------------------------------------------------------------------
-# sync
+# sources
 # ---------------------------------------------------------------------------
 
+METHOD_STYLE = {"http_crawl": "cyan", "browser_session": "magenta", "embedded": "green",
+                "file_import": "blue", "api": "cyan"}
+
+
+def _run_source(source_id: str, *, refresh: bool = False, dry_run: bool = False,
+                limit: Optional[int] = None) -> None:
+    config, db = ctx()
+    from .sources import RunOptions, SourceUnavailable, get, journalled_run
+    source = get(source_id)
+    if source.reaches_network and not dry_run:
+        console.print(f"[dim]{source.title}: {source.method.value} against {source.provider}"
+                      f"{' — ' + source.rate if source.rate else ''}[/dim]")
+    try:
+        capture = journalled_run(config, db, source,
+                                 RunOptions(refresh=refresh, limit=limit, dry_run=dry_run))
+    except SourceUnavailable as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2)
+    payload = capture.as_dict()
+    if dry_run:
+        console.print(f"[dim]dry run —[/dim] {payload['notes'].get('would', 'nothing to say')}")
+        return
+    console.print(payload)
+
+
+@sources_app.command("list")
+def sources_list() -> None:
+    """Every declared source: how it is reached, whether it can run here, when it last did."""
+    config, db = ctx()
+    from .sources import describe
+    table = Table(box=None, pad_edge=False)
+    for column in ("source", "method", "access", "ready", "last run", "yields"):
+        table.add_column(column)
+    for row in describe(config, db):
+        style = METHOD_STYLE.get(row["method"], "white")
+        if row["problems"]:
+            ready = "[yellow]no[/yellow]"
+        elif row["changed"]:
+            ready = "[yellow]input changed[/yellow]"
+        else:
+            ready = "[green]yes[/green]"
+        last = row["last_run"]
+        if last is None:
+            when = "[dim]never[/dim]"
+        else:
+            colour = "green" if last["status"] == "ok" else "red"
+            when = f"[{colour}]{last['status']}[/{colour}] {str(last['finished_at'])[:16]}"
+        table.add_row(row["id"], f"[{style}]{row['method']}[/{style}]", row["access"],
+                      ready, when, ", ".join(row["yields"]))
+    console.print(table)
+    console.print("[dim]network sources run only with `pipeline run --acquire` or "
+                  "`sources run <id>`.[/dim]")
+
+
+@sources_app.command("show")
+def sources_show(source_id: str) -> None:
+    """One source in full: what it needs, what it owns, and its run history."""
+    config, db = ctx()
+    from .sources import describe, get, history
+    get(source_id)
+    row = next(r for r in describe(config, db) if r["id"] == source_id)
+    console.print(f"[bold]{row['title']}[/bold]  [dim]{row['id']}[/dim]")
+    console.print(row["why"])
+    for label, value in (
+        ("provider", row["provider"]), ("method", row["method"]), ("access", row["access"]),
+        ("stage", row["stage"]), ("depends on", ", ".join(row["depends_on"]) or "—"),
+        ("yields", ", ".join(row["yields"])), ("needs", ", ".join(row["secrets"]) or "nothing"),
+        ("rate", row["rate"] or "—"), ("cost", row["cost"] or "—"),
+    ):
+        console.print(f"  [dim]{label:<11}[/dim] {value}")
+    if row["problems"]:
+        console.print("  [yellow]not ready:[/yellow] " + "; ".join(row["problems"]))
+    if row["changed"]:
+        console.print(f"  [yellow]input changed:[/yellow] {row['changed']}")
+    runs = history(db, source_id, limit=8)
+    if runs:
+        console.print("\n[bold]recent runs[/bold]")
+        for run in runs:
+            colour = "green" if run["status"] == "ok" else "red"
+            rows = ", ".join(f"{k} {v:,}" for k, v in run["rows"].items()) or run["error"] or ""
+            console.print(f"  [{colour}]{run['status']:<6}[/{colour}] "
+                          f"{str(run['finished_at'])[:16]}  [dim]{rows}[/dim]")
+
+
+@sources_app.command("run")
+def sources_run(
+    source_id: str,
+    refresh: bool = typer.Option(False, "--refresh", help="Ignore cached fetches."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Say what would happen; do nothing."),
+    limit: Optional[int] = typer.Option(None, "--limit"),
+) -> None:
+    """Run one source by id and journal the result."""
+    _run_source(source_id, refresh=refresh, dry_run=dry_run, limit=limit)
+
+
+@sources_app.command("history")
+def sources_history(source_id: Optional[str] = typer.Argument(None),
+                    limit: int = typer.Option(20, "--limit")) -> None:
+    """The run journal, newest first."""
+    _, db = ctx()
+    from .sources import history
+    table = Table(box=None, pad_edge=False)
+    for column in ("finished", "source", "status", "rows / error"):
+        table.add_column(column)
+    for run in history(db, source_id, limit=limit):
+        colour = "green" if run["status"] == "ok" else "red"
+        rows = ", ".join(f"{k} {v:,}" for k, v in run["rows"].items()) or run["error"]
+        table.add_row(str(run["finished_at"])[:16], run["source"],
+                      f"[{colour}]{run['status']}[/{colour}]", rows[:100])
+    console.print(table)
+
+
+# `sync` is kept as the short spelling people have typed for a year.
 
 @sync_app.command("opportunities")
 def sync_opportunities_cmd() -> None:
     """Authenticated SIGAA discovery and detail backfill. Never applies to anything."""
-    config, db = ctx()
-    from .acquisition.sigaa_authenticated import sync_opportunities
-    console.print(_sync(db, "opportunities", lambda: sync_opportunities(config)))
+    _run_source("sigaa.opportunities")
 
 
 @sync_app.command("applications")
 def sync_applications_cmd() -> None:
     """Synchronize the authoritative 'Meus Registros de Interesse' state."""
-    config, db = ctx()
-    from .acquisition.sigaa_authenticated import sync_applications
-    console.print(_sync(db, "applications", lambda: sync_applications(config)))
+    _run_source("sigaa.applications")
 
 
 @sync_app.command("professors")
 def sync_professors_cmd(
-    input_csv: Optional[Path] = typer.Option(None, "--input"),
     refresh: bool = typer.Option(False, "--refresh", help="Re-fetch pages already archived"),
-    detail_depth: Optional[int] = typer.Option(None, "--detail-depth"),
 ) -> None:
     """Archive the public professor corpus and import it (includes Lattes)."""
-    config, db = ctx()
-    from .acquisition.ledger import export_professors_csv_for_scraper
-    from .acquisition.sigaa_public import sync_professors
-    seed = input_csv or config.paths.professors_csv
-    if input_csv is None:
-        if int(db.scalar("SELECT COUNT(*) FROM opportunities", default=0)):
-            export_professors_csv_for_scraper(db, seed)
-        elif not seed.exists():
-            raise typer.BadParameter("No opportunities in DuckDB and no professor seed CSV exists")
-    console.print(_sync(db, "professors", lambda: sync_professors(
-        config, input_csv=seed, refresh=refresh, detail_depth=detail_depth)))
+    _run_source("sigaa.professors", refresh=refresh)
 
 
 @sync_app.command("all")
 def sync_all_cmd(refresh_public: bool = typer.Option(False, "--refresh-public")) -> None:
-    """Full pipeline: opportunities → professors → applications → semantics."""
+    """Every source that can run here, in dependency order, then the derived stages."""
     config, db = ctx()
-    from .acquisition.ledger import export_professors_csv_for_scraper, resolve_opportunity_professors
-    from .acquisition.sigaa_authenticated import sync_applications, sync_opportunities
-    from .acquisition.sigaa_public import sync_professors
+    from .pipeline import run as run_pipeline
+    if refresh_public:
+        _run_source("sigaa.professors", refresh=True)
+    for outcome in run_pipeline(config, db, include_acquisition=True, force=True,
+                                log=lambda line: console.print(f"[dim]{line}[/dim]")):
+        colour = "green" if outcome["status"] == "ok" else "red"
+        console.print(f"  {outcome['stage']:<26} [{colour}]{outcome['status']}[/{colour}] "
+                      f"[dim]{outcome.get('detail', '')}[/dim]")
 
-    console.rule("1/4 authenticated opportunities")
-    console.print(_sync(db, "opportunities", lambda: sync_opportunities(config)))
-    export_professors_csv_for_scraper(db, config.paths.professors_csv)
-    console.rule("2/4 public professor corpus")
-    console.print(_sync(db, "professors", lambda: sync_professors(
-        config, input_csv=config.paths.professors_csv, refresh=refresh_public)))
-    resolve_opportunity_professors(db)
-    console.rule("3/4 applications")
-    console.print(_sync(db, "applications", lambda: sync_applications(config)))
-    console.rule("4/4 semantics")
-    semantics_build()
+
+# ---------------------------------------------------------------------------
+# records
+# ---------------------------------------------------------------------------
+
+
+@records_app.command("build")
+def records_build() -> None:
+    """Read the archive into typed records: works, appointments, degrees, boards, students."""
+    _, db = ctx()
+    from .records import build
+    stats = build(db)
+    families = ", ".join(f"{k} {v:,}" for k, v in sorted(stats["families"].items(), key=lambda x: -x[1]))
+    console.print(f"[green]{stats['records']:,} records[/green], {stats['people']:,} named people")
+    console.print(f"[dim]{families}[/dim]")
+
+
+@records_app.command("status")
+def records_status() -> None:
+    """Whether the records reflect the current archive, and what they hold."""
+    _, db = ctx()
+    from .records import FAMILIES
+    from .records.store import facets, summary
+    state = summary(db)
+    if not state["built"]:
+        console.print("[yellow]never built — run `pulsar records build`[/yellow]")
+        return
+    current = "[green]current[/green]" if state["fingerprint_current"] else "[red]STALE[/red]"
+    console.print(f"{state['stats'].get('records', 0):,} records, built {str(state['created_at'])[:16]} — {current}")
+    table = Table(box=None, pad_edge=False)
+    for column in ("family", "records", "years", "what"):
+        table.add_column(column)
+    for row in facets(db)["families"]:
+        span = f"{row['from'] or '?'}–{row['to'] or '?'}" if row["from"] or row["to"] else "—"
+        table.add_row(row["family"], f"{row['count']:,}", span, FAMILIES.get(row["family"], ""))
+    console.print(table)
+
+
+@records_app.command("search")
+def records_search(
+    q: str = typer.Argument("", help="Words that must all appear (title, venue, people, keywords)."),
+    family: str = typer.Option("", "--family"),
+    form: str = typer.Option("", "--form"),
+    person: str = typer.Option("", "--person", help="A name that must be on the record."),
+    who: str = typer.Option("", "--who", help="Restrict to one professor (SIAPE or name fragment)."),
+    since: Optional[int] = typer.Option(None, "--since"),
+    until: Optional[int] = typer.Option(None, "--until"),
+    limit: int = typer.Option(40, "--limit"),
+) -> None:
+    """Search every record in the store."""
+    _, db = ctx()
+    from .records.store import search
+    siape = _resolve_professor(db, who) if who else ""
+    result = search(db, q=q, family=family, form=form, person=person, siape=siape,
+                    year_from=since, year_to=until, limit=limit)
+    names = _names(db)
+    table = Table(box=None, pad_edge=False)
+    for column in ("year", "family", "form", "who", "title", "with / where", "id"):
+        table.add_column(column, overflow="fold")
+    for row in result["rows"]:
+        where = row["venue"] or row["org"] or row["counterpart"]
+        table.add_row(str(row["year"] or ""), row["family"], row["form"],
+                      names.get(row["siape"], row["siape"]), row["title"][:90], where[:50],
+                      f"[dim]{row['record_id']}[/dim]")
+    console.print(table)
+    console.print(f"[dim]{len(result['rows'])} of {result['total']:,} matching records[/dim]")
+
+
+@records_app.command("show")
+def records_show(record_id: str) -> None:
+    """One record, every field."""
+    _, db = ctx()
+    from .records.store import get
+    row = get(db, record_id)
+    if row is None:
+        console.print(f"[red]no record {record_id}[/red]")
+        raise typer.Exit(1)
+    console.print(f"[bold]{row['title']}[/bold]")
+    for key in ("family", "form", "year", "year_end", "status", "org", "counterpart", "venue",
+                "doi", "language", "nature", "keywords", "areas", "source", "source_ref"):
+        value = row.get(key)
+        if value not in (None, "", [], {}):
+            console.print(f"  [dim]{key:<12}[/dim] {value}")
+    if row["people"]:
+        console.print("  [dim]people[/dim]")
+        for p in row["people"]:
+            console.print(f"    {p['ordinal']:>2}. {p['name']}  [dim]{p['role']}[/dim]")
+    if row["payload"]:
+        console.print(f"  [dim]payload[/dim]      {json.dumps(row['payload'], ensure_ascii=False)[:600]}")
+
+
+@records_app.command("people")
+def records_people(who: str, limit: int = typer.Option(30, "--limit")) -> None:
+    """Who appears around one professor: co-authors, students, board colleagues."""
+    _, db = ctx()
+    from .records.store import people_around
+    siape = _resolve_professor(db, who)
+    table = Table(box=None, pad_edge=False)
+    for column in ("name", "records", "years", "as", "in"):
+        table.add_column(column)
+    for p in people_around(db, siape, limit=limit):
+        years = f"{p['first_year'] or '?'}–{p['last_year'] or '?'}"
+        table.add_row(p["name"], str(p["count"]), years, ", ".join(p["roles"]), ", ".join(p["families"]))
+    console.print(table)
+
+
+def _resolve_professor(db: Database, token: str) -> str:
+    """A SIAPE, or enough of an indexed professor's name to be unambiguous.
+
+    Narrower than `_resolve_entity` on purpose: records belong to indexed
+    people, and "Malhado" should find the professor, not her six citation
+    spellings in the graph.
+    """
+    if token.isdigit():
+        return token
+    rows = db.query_df(
+        f"SELECT siape, canonical_name FROM professors WHERE {NAME_MATCH.replace('(name)', '(canonical_name)')} ORDER BY canonical_name",
+        [_name_like(token)])
+    if len(rows) == 1:
+        return str(rows.iloc[0]["siape"])
+    if not len(rows):
+        console.print(f"[red]No professor matches[/red] {token!r}.")
+    else:
+        console.print(f"[yellow]{token!r} matches several professors:[/yellow]")
+        _print_df(rows)
+    raise typer.Exit(1)
+
+
+def _names(db: Database) -> dict[str, str]:
+    from .graph.identity import Names
+    frame = db.query_df("SELECT siape, canonical_name FROM professors")
+    names = Names(db)
+    return {str(r.siape): names.display(str(r.siape), r.canonical_name) for r in frame.itertuples()}
 
 
 # ---------------------------------------------------------------------------
