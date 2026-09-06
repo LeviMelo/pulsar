@@ -8,7 +8,7 @@ sneaking into an averaged score would misstate a measurement to a reader.
 """
 from __future__ import annotations
 
-from pulsar_research.outreach.panels import benchmark_summary, decimal
+from pulsar_research.apps.outreach.panels import benchmark_summary, decimal
 
 ROWS = [
     {"benchmark": "title_to_body", "channel": c, "metric": "mrr", "value": v}

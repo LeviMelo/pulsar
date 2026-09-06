@@ -19,6 +19,7 @@ import json
 import os
 import subprocess
 import sys
+import unicodedata
 from uuid import uuid4
 from pathlib import Path
 from typing import Optional
@@ -39,12 +40,29 @@ opp_app = typer.Typer(help="Opportunity intelligence", no_args_is_help=True)
 campaign_app = typer.Typer(help="Audience, drafts, review and explicit sending", no_args_is_help=True)
 applications_app = typer.Typer(help="SIGAA application state and explicit application",
                                no_args_is_help=True)
+graph_app = typer.Typer(help="The entity graph: structure, neighbourhoods and paths",
+                        no_args_is_help=True)
+pipeline_app = typer.Typer(help="What is stale, what would run, and running it",
+                           no_args_is_help=True)
 app.add_typer(sync_app, name="sync")
 app.add_typer(sem_app, name="semantics")
 app.add_typer(prof_app, name="professors")
 app.add_typer(opp_app, name="opportunities")
 app.add_typer(campaign_app, name="campaign")
 app.add_typer(applications_app, name="applications")
+app.add_typer(graph_app, name="graph")
+app.add_typer(pipeline_app, name="pipeline")
+
+# The corpus is Portuguese and half the output is arrows and accents, but a
+# Windows console still defaults to cp1252, where an arrow raises
+# UnicodeEncodeError mid-render and takes the command down. Ask for UTF-8, and
+# fall back to replacement rather than to a traceback on a terminal that cannot
+# do it — a mangled glyph is a cosmetic problem; a crashed `graph path` is not.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError, ValueError):
+        pass
 
 console = Console()
 
@@ -88,7 +106,7 @@ def _smtp_summary(config: AppConfig) -> str:
     # Present is not the same as accepted. Reporting "ready" on the strength of
     # four non-empty strings once sent an operator into a 62-message campaign
     # with a password the relay refuses, so doctor now authenticates for real.
-    from .outreach.mailer import SMTPProvider
+    from .apps.outreach.mailer import SMTPProvider
 
     ok, detail = SMTPProvider(config).verify_credentials()
     where = f"{sender} via {host}:{smtp.get('port', 587)}"
@@ -127,6 +145,12 @@ def _print_df(df, *, empty: str = "No rows.") -> None:
         console.print(f"[dim]{empty}[/dim]")
         return
     console.print(df.to_string(index=False))
+
+
+def _print_rows(rows, *, empty: str = "No rows.") -> None:
+    """Same, for the graph readers, which return records rather than a frame."""
+    import pandas as pd
+    _print_df(pd.DataFrame(list(rows)), empty=empty)
 
 
 # ---------------------------------------------------------------------------
@@ -673,7 +697,7 @@ def applications_apply(
 
 
 def _audience_query(**kwargs) -> "object":
-    from .outreach.selectors import AudienceQuery
+    from .apps.outreach.selectors import AudienceQuery
     return AudienceQuery(**{k: v for k, v in kwargs.items() if v is not None})
 
 
@@ -690,7 +714,7 @@ def campaign_audience(
 ) -> None:
     """Preview an audience with its qualifying evidence. Persists nothing."""
     _, db = ctx()
-    from .outreach.selectors import select_audience
+    from .apps.outreach.selectors import select_audience
     query = _audience_query(funded_only=funded, centers=list(center), keywords=list(keyword),
                             skill_ids=list(skill), topic_ids=list(topic),
                             min_current_percentile=min_current,
@@ -728,7 +752,7 @@ def campaign_create(
 ) -> None:
     """Freeze an audience and generate one editable draft per recipient."""
     config, db = ctx()
-    from .outreach.campaigns import create_campaign
+    from .apps.outreach.campaigns import create_campaign
     from .semantics.corpus import load_corpus
     query = _audience_query(funded_only=funded, centers=list(center), keywords=list(keyword),
                             skill_ids=list(skill), topic_ids=list(topic),
@@ -762,7 +786,7 @@ def campaign_list() -> None:
 def campaign_show(campaign_id: str, limit: int = typer.Option(10, "--limit")) -> None:
     """Summary, provenance, and the first drafts with their qualifying evidence."""
     _, db = ctx()
-    from .outreach.campaigns import campaign_rows, campaign_summary
+    from .apps.outreach.campaigns import campaign_rows, campaign_summary
     console.print(campaign_summary(db, campaign_id))
     for row in campaign_rows(db, campaign_id)[:limit]:
         console.rule(f"{row['professor_name']} <{row['email']}> · {row['status']} · "
@@ -775,7 +799,7 @@ def campaign_show(campaign_id: str, limit: int = typer.Option(10, "--limit")) ->
 def campaign_preview(campaign_id: str, limit: int = typer.Option(25, "--limit")) -> None:
     """Write the rendered HTML drafts to a local file for review."""
     config, db = ctx()
-    from .outreach.campaigns import write_preview
+    from .apps.outreach.campaigns import write_preview
     path = write_preview(db, campaign_id, config.paths.exports_dir / f"campaign_{campaign_id}.html",
                          limit=limit)
     console.print(f"Preview written to {path}")
@@ -786,7 +810,7 @@ def campaign_select(campaign_id: str, siape: str,
                     selected: bool = typer.Option(True, "--select/--deselect")) -> None:
     """Include or exclude one recipient from sending."""
     _, db = ctx()
-    from .outreach.campaigns import update_message
+    from .apps.outreach.campaigns import update_message
     update_message(db, campaign_id, siape, selected=selected)
     console.print({"campaign_id": campaign_id, "siape": siape, "selected": selected})
 
@@ -799,7 +823,7 @@ def campaign_edit(
 ) -> None:
     """Replace one recipient's draft from local files. Other drafts are untouched."""
     config, db = ctx()
-    from .outreach.campaigns import regenerate_html, update_message
+    from .apps.outreach.campaigns import regenerate_html, update_message
     update_message(
         db, campaign_id, siape,
         subject=subject_file.read_text(encoding="utf-8").strip() if subject_file else None,
@@ -813,7 +837,7 @@ def campaign_edit(
 def campaign_export(campaign_id: str, path: Optional[Path] = typer.Option(None, "--path")) -> None:
     """Write the campaign roster, rationale and drafts to CSV."""
     config, db = ctx()
-    from .outreach.campaigns import export_campaign
+    from .apps.outreach.campaigns import export_campaign
     out = path or config.paths.exports_dir / f"campaign_{campaign_id}.csv"
     console.print(str(export_campaign(db, campaign_id, out)))
 
@@ -826,7 +850,7 @@ def campaign_send(
 ) -> None:
     """Send the SELECTED drafts. Without --confirm this is a dry run."""
     config, db = ctx()
-    from .outreach.mailer import send_campaign
+    from .apps.outreach.mailer import send_campaign
     result = send_campaign(config, db, campaign_id, confirm=confirm, limit=limit)
     if result.get("dry_run"):
         console.print(f"[yellow]Dry run[/yellow] — would send {result['would_send']} message(s).")
@@ -835,6 +859,260 @@ def campaign_send(
         console.print("Re-run with --confirm to send.")
     else:
         console.print(result)
+
+
+
+# ---------------------------------------------------------------------------
+# The entity graph
+# ---------------------------------------------------------------------------
+
+
+def _name_like(token: str) -> str:
+    """A LIKE pattern that ignores case and accents, for matching entity names."""
+    decomposed = unicodedata.normalize("NFD", token.lower())
+    return "%" + "".join(c for c in decomposed if not unicodedata.combining(c)) + "%"
+
+
+#: DuckDB folds the stored side; the caller folds the query side. Both have to
+#: happen, because `graph_entities.name` holds the accented spelling on purpose.
+NAME_MATCH = "lower(strip_accents(name)) LIKE ?"
+
+
+def _resolve_entity(db: Database, token: str) -> Optional[str]:
+    """Accept an entity id, a SIAPE, or enough of a name to be unambiguous.
+
+    Nobody types `person:1157495`. The graph's ids are stable and machine-facing;
+    this is the human end of them, and it refuses rather than guesses when a
+    fragment matches more than one entity.
+    """
+    if ":" in token and len(db.query_df("SELECT 1 FROM graph_entities WHERE entity_id=?", [token])):
+        return token
+    if token.isdigit():
+        candidate = f"person:{token}"
+        if len(db.query_df("SELECT 1 FROM graph_entities WHERE entity_id=?", [candidate])):
+            return candidate
+    rows = db.query_df(
+        f"SELECT entity_id, kind, name FROM graph_entities WHERE {NAME_MATCH} "
+        "ORDER BY length(name), entity_id LIMIT 10", [_name_like(token)])
+    if not len(rows):
+        console.print(f"[red]No entity matches[/red] {token!r}.")
+        return None
+    if len(rows) > 1 and str(rows.iloc[0]["name"]).lower() != token.lower():
+        console.print(f"[yellow]{token!r} is ambiguous:[/yellow]")
+        _print_df(rows)
+        return None
+    return str(rows.iloc[0]["entity_id"])
+
+
+@graph_app.command("build")
+def graph_build() -> None:
+    """Project every acquired fact into the entity graph, replacing the last one."""
+    config, db = ctx()
+    from .pipeline.registry import BY_NAME
+    stats = _sync(db, "graph.project", lambda: BY_NAME["graph.project"].run(config, db))
+    console.print(f"[green]{stats['entities']:,}[/green] entities, "
+                  f"[green]{stats['edges']:,}[/green] edges.")
+    console.print("[dim]Structural measures are not recomputed by this command — "
+                  "run `pulsar graph measure`.[/dim]")
+
+
+@graph_app.command("measure")
+def graph_measure() -> None:
+    """Recompute centrality, communities, bridging and external reach."""
+    config, db = ctx()
+    from .pipeline.registry import BY_NAME
+    stats = _sync(db, "graph.metrics", lambda: BY_NAME["graph.metrics"].run(config, db))
+    console.print("  ".join(f"{k}=[bold]{v:,}[/bold]" for k, v in stats.items()))
+
+
+@graph_app.command("status")
+def graph_status() -> None:
+    """Size, composition, and how it stands against the current corpus."""
+    _, db = ctx()
+    from .graph import summary
+    from .pipeline.registry import BY_NAME
+    info = summary(db)
+    if not info["entities"]:
+        console.print("[yellow]No graph has been built.[/yellow] Run `pulsar graph build`.")
+        return
+    fresh = BY_NAME["graph.project"].status(db)
+    colour = {"ok": "green", "stale": "red"}.get(fresh.state, "yellow")
+    console.print(f"[bold]{info['entities']:,}[/bold] entities, "
+                  f"[bold]{info['edges']:,}[/bold] edges — [{colour}]{fresh.detail}[/{colour}]")
+    console.rule("entities by kind")
+    console.print("   ".join(f"{k} [bold]{v:,}[/bold]" for k, v in info["by_kind"].items()))
+    console.rule("edges by relation")
+    console.print("   ".join(f"{k} [bold]{v:,}[/bold]" for k, v in info["by_relation"].items()))
+
+
+@graph_app.command("show")
+def graph_show(who: str,
+               limit: int = typer.Option(20, "--limit", help="Neighbours to list.")) -> None:
+    """One entity: what it is, how it measures, and what it is joined to."""
+    _, db = ctx()
+    from .graph import entity, metrics_for, neighbours
+    entity_id = _resolve_entity(db, who)
+    if not entity_id:
+        raise typer.Exit(code=1)
+    record = entity(db, entity_id) or {}
+    console.print(f"[bold]{record.get('name', entity_id)}[/bold]  "
+                  f"[dim]{entity_id} · {record.get('kind', '?')}[/dim]")
+    if record.get("sources"):
+        console.print(f"[dim]from {', '.join(record['sources'])}[/dim]")
+
+    measures = metrics_for(db, entity_id)
+    if measures:
+        console.rule("structure")
+        for metric in ("degree", "weighted_degree", "betweenness", "bridging",
+                       "external_reach", "community"):
+            if metric in measures:
+                value = measures[metric]
+                shown = f"{value:,.0f}" if metric.endswith("degree") or metric == "community" \
+                    else f"{value:.4f}"
+                console.print(f"  {metric:<16} {shown}")
+    console.rule(f"neighbours (top {limit} by tie strength)")
+    _print_rows(neighbours(db, entity_id, limit=limit), empty="Nothing joins to this entity.")
+
+
+@graph_app.command("top")
+def graph_top(
+    metric: str = typer.Argument(..., help="degree, betweenness, bridging, external_reach…"),
+    kind: Optional[str] = typer.Option("person", "--kind", help="Restrict to one entity kind."),
+    limit: int = typer.Option(20, "--limit"),
+    min_degree: int = typer.Option(
+        3, "--min-degree",
+        help="Ignore vertices with fewer ties than this. Shares like bridging are "
+             "trivially 1.0 on a vertex with two neighbours; pass 0 to see them."),
+) -> None:
+    """Rank entities by a structural measure."""
+    _, db = ctx()
+    from .graph import top_by_metric
+    from .graph.model import Kind
+    rows = top_by_metric(db, metric, kind=Kind(kind) if kind else None,
+                         limit=limit, min_degree=min_degree)
+    if not rows:
+        console.print(f"[yellow]No rows for metric {metric!r}.[/yellow]")
+        _print_df(db.query_df("SELECT DISTINCT metric FROM entity_metrics ORDER BY 1"),
+                  empty="No measures computed — run `pulsar graph measure`.")
+        raise typer.Exit(code=1)
+    _print_rows(rows)
+
+
+@graph_app.command("path")
+def graph_path(source: str, target: str,
+               relation: str = typer.Option("collaborates_with", "--relation")) -> None:
+    """The strongest short chain between two entities — who could introduce whom."""
+    _, db = ctx()
+    from .graph import adjacency, entity
+    from .graph.model import Relation
+    from .intelligence.network import shortest_path
+    start, end = _resolve_entity(db, source), _resolve_entity(db, target)
+    if not start or not end:
+        raise typer.Exit(code=1)
+    chain = shortest_path(adjacency(db, relations=[Relation(relation)]), start, end)
+    if not chain:
+        console.print("[yellow]No path[/yellow] — they fall in different components "
+                      f"of the {relation} graph.")
+        raise typer.Exit(code=1)
+    for step, node in enumerate(chain):
+        record = entity(db, node) or {}
+        console.print(("   " if not step else " → ") + f"[bold]{record.get('name', node)}[/bold]")
+
+
+@graph_app.command("find")
+def graph_find(query: str, limit: int = typer.Option(20, "--limit")) -> None:
+    """Look up entity ids by name."""
+    _, db = ctx()
+    _print_df(db.query_df(
+        f"SELECT entity_id, kind, name FROM graph_entities WHERE {NAME_MATCH} "
+        "ORDER BY kind, length(name) LIMIT ?", [_name_like(query), int(limit)]),
+        empty="Nothing matches.")
+
+
+# ---------------------------------------------------------------------------
+# The build pipeline
+# ---------------------------------------------------------------------------
+
+#: `blocked` gets its own colour because it is the state operators misread: the
+#: stage itself is fine, and re-running it alone would still be wrong.
+STATE_STYLE = {"ok": "green", "stale": "red", "never": "yellow",
+               "blocked": "magenta", "unknown": "dim"}
+
+
+@pipeline_app.command("status")
+def pipeline_status(
+    why: bool = typer.Option(False, "--why", help="Print what each stage is for."),
+) -> None:
+    """What is current, what is stale, and why."""
+    _, db = ctx()
+    from .pipeline import status
+    rows = status(db)
+    table = Table(box=None, pad_edge=False)
+    for column in ("stage", "state", "detail"):
+        table.add_column(column)
+    for row in rows:
+        style = STATE_STYLE.get(row["state"], "white")
+        table.add_row(row["stage"], f"[{style}]{row['state']}[/{style}]", row["detail"])
+        if why:
+            table.add_row("", "", f"[dim]{row['why']}[/dim]")
+    console.print(table)
+    needing = [r["stage"] for r in rows if r["state"] in ("stale", "never")]
+    if needing:
+        console.print(f"\n[dim]stale or missing: {', '.join(needing)}[/dim]")
+
+
+@pipeline_app.command("explain")
+def pipeline_explain(stage: str) -> None:
+    """What this stage needs, and what re-running it invalidates."""
+    _, db = ctx()
+    from .pipeline.registry import BY_NAME, dependents, with_dependencies
+    if stage not in BY_NAME:
+        console.print(f"[red]Unknown stage[/red] {stage!r}. Known: {', '.join(BY_NAME)}")
+        raise typer.Exit(code=1)
+    declared = BY_NAME[stage]
+    console.print(f"[bold]{declared.title}[/bold]  [dim]{declared.name}[/dim]")
+    console.print(declared.why)
+    console.print(f"\nproduces      {', '.join(declared.produces) or '—'}")
+    needs = sorted(set(with_dependencies([stage])) - {stage})
+    console.print(f"needs         {', '.join(needs) or '—'}")
+    console.print(f"blast radius  {', '.join(dependents(stage)) or '—'}")
+    fresh = declared.status(db)
+    style = STATE_STYLE.get(fresh.state, "white")
+    console.print(f"now           [{style}]{fresh.state}[/{style}] — {fresh.detail}")
+
+
+@pipeline_app.command("run")
+def pipeline_run(
+    stages: Optional[list[str]] = typer.Argument(None, help="Stages to bring up to date."),
+    acquire: bool = typer.Option(False, "--acquire",
+                                 help="Include the scrapes. Costs minutes and hits "
+                                      "somebody else's server."),
+    force: bool = typer.Option(False, "--force", help="Run even where nothing looks stale."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print the plan and stop."),
+) -> None:
+    """Bring the derived store up to date, in dependency order."""
+    config, db = ctx()
+    from .pipeline import plan, run
+    only = list(stages) if stages else None
+    chosen = plan(db, only=only, include_acquisition=acquire, force=force)
+    if not chosen:
+        console.print("[green]Everything is current.[/green]")
+        return
+    console.print("[bold]Plan[/bold]")
+    for index, stage in enumerate(chosen, start=1):
+        console.print(f"  {index}. {stage.name}  " +
+                      ("[red]network[/red]" if stage.acquires else "[dim]derived[/dim]"))
+    if dry_run:
+        return
+    results = run(config, db, only=only, include_acquisition=acquire, force=force,
+                  log=lambda line: console.print(f"[dim]{line}[/dim]"))
+    console.rule("result")
+    for outcome in results:
+        style = {"ok": "green", "failed": "red"}.get(outcome["status"], "yellow")
+        console.print(f"  [{style}]{outcome['status']:<8}[/{style}] {outcome['stage']}  "
+                      f"{outcome.get('detail') or ''}")
+    if any(r["status"] == "failed" for r in results):
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":

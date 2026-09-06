@@ -127,7 +127,7 @@ class Console:
         raise NotFound(path)
 
     def _set_outcome(self, body: dict[str, Any]) -> Any:
-        from ..outreach import outcomes as oc
+        from ..apps.outreach import outcomes as oc
 
         campaign_id = str(body.get("campaign_id") or "")
         siape = str(body.get("siape") or "")
@@ -150,7 +150,7 @@ class Console:
                               {"campaign_id": p[0], "siape": p[1]})(oc.indicated(self.db))}
 
     def _update_message(self, body: dict[str, Any]) -> Any:
-        from ..outreach.campaigns import regenerate_html, update_message
+        from ..apps.outreach.campaigns import regenerate_html, update_message
 
         campaign_id = str(body.get("campaign_id") or "")
         siape = str(body.get("siape") or "")

@@ -17,7 +17,7 @@ replaces the former `ARCHITECTURE.md`, which has been merged here and retired.
 
 Sections 1–3 are **goals and constraints**: preserve them. Sections 4–17 are the
 **current design**: change them whenever evidence says something better exists,
-but record the change in §22. Sections 19–21 are **live state**: keep them
+but record the change in §24. Sections 19–21 are **live state**: keep them
 current as work lands.
 
 Two rules govern every change:
@@ -34,32 +34,39 @@ Two rules govern every change:
 
 PULSAR is not a SIGAA scraper. Scraping is the cheapest part.
 
-It is a local system that understands an academic research ecosystem well enough
-to *act* inside it:
+It is a local system that models an academic research ecosystem well enough to
+*act* inside it. Two layers, and the boundary between them is load-bearing:
 
 ```text
-DATA ACQUISITION
-      ↓
-NORMALIZATION + PROVENANCE
-      ↓
-RESEARCH INTELLIGENCE
-      ↓
-SEARCH / RETRIEVAL / MATCHING / LANDSCAPE
-      ↓
-PROFESSOR + OPPORTUNITY PROSPECTING
-      ↓
-AUDIENCE SELECTION
-      ↓
-CAMPAIGN CONSTRUCTION
-      ↓
-INDIVIDUALIZED DRAFTS
-      ↓
-MANUAL REVIEW
-      ↓
-EXPLICIT OUTREACH
-      ↓
-HISTORY / OUTCOMES
+┌─ PLATFORM ─────────────────────────────────────────────────┐
+│  DATA ACQUISITION                                          │
+│        ↓                                                   │
+│  NORMALIZATION + PROVENANCE                                │
+│        ↓                                                   │
+│  THE CORPUS  ──→  SEMANTIC SPACE  ──→  RANKING / EVIDENCE  │
+│        ↓                ↓                                  │
+│  THE ENTITY GRAPH  ←────┘                                  │
+│        ↓                                                   │
+│  STRUCTURAL MEASURES: centrality, communities, bridging,   │
+│                       external reach, introduction paths   │
+│        ↓                                                   │
+│  THE PIPELINE: what is stale, what would run, what breaks  │
+└────────────────────────────────────────────────────────────┘
+                        ↓
+┌─ APPLICATIONS ─────────────────────────────────────────────┐
+│  the console — read the ecosystem                          │
+│  outreach — audience, drafts, review, explicit send        │
+└────────────────────────────────────────────────────────────┘
 ```
+
+The platform knows nothing about writing to anybody. Outreach was the first
+application built on it and for a while was indistinguishable from the project
+itself — the ranking existed to pick recipients, and the console's serving layer
+imported the email package to find out how to spell someone's name. Both halves
+still matter: analysis without action is a dashboard, action without analysis is
+spam. But an ecosystem model that can only be used to send letters is a letter
+generator with extra steps, and the next application built here should not have
+to import the first one.
 
 ### The questions it must answer
 
@@ -74,6 +81,14 @@ HISTORY / OUTCOMES
   skills dominate it?
 - Who should I contact, why, have I already contacted them, what did I send, what
   is still a draft, and what did the evidence look like at the time?
+
+And, since §13, the ones no ranked table can answer:
+
+- Which clusters does this faculty actually decompose into, as opposed to the
+  units it is administratively divided into?
+- Who sits between two groups that otherwise do not talk?
+- Whose collaboration reaches outside the institution, and whose does not?
+- How would I get an introduction to this person?
 
 Both halves matter. Analysis without action is a dashboard; action without
 analysis is spam.
@@ -153,13 +168,18 @@ Cosine similarities and rank-fusion outputs are not calibrated. The UI shows
 
 ## 4. Repository layout
 
+The directory structure carries an argument. Everything above `apps/` models an
+academic network and keeps it current; nothing in it knows that anybody is ever
+written to. `apps/` holds programs built on that. **Nothing under `apps/` may be
+imported by anything above it.**
+
 ```text
 config/
   default.toml                 non-secret configuration; every semantics key is hashed into space_id
   local.toml                   git-ignored personal overlay, deep-merged over default.toml
   profile.yaml                 the operator profile (domain / methods / skills / skill_ids)
 src/pulsar_research/
-  cli.py                       Typer CLI, grouped by pipeline stage
+  cli.py                       Typer CLI, grouped by subsystem
   config.py                    paths + config sections; secrets by env-var NAME only
   db.py                        DuckDB schema, forward-only migration, query helpers
   acquisition/
@@ -181,18 +201,37 @@ src/pulsar_research/
     benchmark.py               the semantic regression battery
     provenance.py              semantic_space_id / profile_run_id / staleness
     engine.py                  orchestration: build_space, run_profile, persistence
-  intelligence/metrics.py      scientometrics: concentration, portfolio counts, collaboration
-  outreach/
-    selectors.py               AudienceQuery → recipients with evidence and rationale
-    campaigns.py               frozen snapshots, individual drafts, previews, exports
-    render.py                  Jinja2 → plaintext + HTML theme
-    mailer.py                  the only module that can send email
-  dashboard/
-    queries.py                 all console SQL (reusable from a notebook too)
-    app.py                     the operator console
-  templates/                   subject/body Jinja2 + the HTML email theme
-tests/                         corpus, representations, skills, provenance, SIGAA contract
-data/                          git-ignored; see §18
+  graph/                       §13
+    model.py                   kinds, relations, endpoint rules, id minting
+    identity.py                name folding, accented-name recovery, alias resolution
+    project.py                 acquired facts → entities and edges
+    store.py                   wholesale write, neighbourhoods, adjacency, rankings
+  intelligence/
+    metrics.py                 scientometrics: concentration, portfolio counts, collaboration
+    network.py                 centrality, communities, bridging, reach, introduction paths
+  pipeline/                    §14
+    registry.py                the stage DAG, freshness probes, blast radius
+    runner.py                  planning and execution, journalled into sync_runs
+  webapp/
+    server.py                  the console's HTTP layer; serves the built frontend
+    payloads.py                every console read, as JSON
+    network.py                 the three faculty graphs the network view draws
+    desktop.py                 the same console in a native window (pywebview)
+    frontend/                  Vite + React + TypeScript sources
+    static/                    the frontend build output (generated)
+  dashboard/queries.py         console SQL, reusable from a notebook
+  apps/                        programs built on the platform, never imported by it
+    outreach/
+      selectors.py             AudienceQuery → recipients with evidence and rationale
+      campaigns.py             frozen snapshots, individual drafts, previews, exports
+      render.py                Jinja2 → plaintext + HTML theme
+      caixa.py, saudacao.py    the text craft: de-shouting, salutation, name handling
+      outcomes.py              what came of each thread
+      mailer.py                the only module that can send email
+      templates/               subject/body Jinja2 + the HTML email theme
+tests/                         corpus, representations, skills, provenance, graph,
+                               measures, pipeline, SIGAA contract
+data/                          git-ignored; see §20
 ```
 
 ---
@@ -491,7 +530,7 @@ predicts: consensus truncation discards view-specific signal. Block fusion stays
 the default.
 
 Not implemented, deliberately: CCA/GCCA and JIVE/AJIVE-style joint+individual
-decompositions (§21). They are the right next question if block fusion plateaus,
+decompositions (§23). They are the right next question if block fusion plateaus,
 but with 89 projects the sample size does not support learning cross-view
 projections without overfitting.
 
@@ -667,7 +706,171 @@ move every coordinate.
 
 ---
 
-## 13. Database schema (v3)
+## 13. The entity graph
+
+Everything before this section describes a table of people with scores attached.
+That is enough to rank, and it is what PULSAR was for a while. It cannot answer
+the questions that actually decide what to do:
+
+- Who sits between two groups that otherwise do not talk?
+- Which clusters does this faculty decompose into, as opposed to the units it is
+  administratively divided into?
+- Whose collaboration reaches outside the institution, and whose does not?
+- How would I get an introduction to this person?
+
+None of those is a property of a row. They are properties of a structure, so
+there is now a structure: one id space, one relation vocabulary, one projection.
+
+### 13.1 The id space
+
+`graph/model.py` declares seven kinds and ten relations, and nothing else is
+allowed to exist. An entity id is `kind:key` — `person:1157495`, `org:icbs`,
+`position:12345` — and the key is accent-folded, so `Nóbrega` and `Nobrega` are
+one node rather than two.
+
+| kind | what it is |
+| --- | --- |
+| `person` | a researcher: indexed faculty, or an external co-author |
+| `org` | a centre, unit or department |
+| `work` | an article, chapter, conference paper or technical output |
+| `project` | a research or extension project |
+| `position` | an offered supervision slot — a work plan |
+| `topic` | a factor of the semantic space |
+| `skill` | an extracted technique |
+
+Faculty are identified by SIAPE. External co-authors have no registry number
+anywhere reachable, so their identity is their name: `person:name-<slug>`. That
+is genuinely weak — two people publishing under one name become one node, and
+one person publishing under two spellings becomes two — and `is_indexed_person()`
+exists so that no measure quietly treats the two classes as equally reliable.
+
+### 13.2 The vocabulary
+
+`affiliated_with`, `part_of`, `authored`, `supervised`, `leads`, `offers`,
+`within`, `collaborates_with`, `about`, `uses`. Each declares which kinds it may
+join, and `Edge.validate()` raises rather than storing a relation that does not
+typecheck — a graph that accepts `work → authored → person` is a graph whose
+answers cannot be trusted in either direction.
+
+`collaborates_with` is the only symmetric relation. It is stored once, in
+canonical id order, and expanded on read; storing both directions would make
+every degree twice what it is.
+
+Weight means whatever the relation means — co-authored papers, mentions, topic
+share — and is **never comparable across relations**. Two facts implying the same
+relation sum their weight rather than overwriting, because a second paper with
+the same person is a stronger tie, not a duplicate row.
+
+### 13.3 The projection is a replacement, not an accumulation
+
+`graph/project.py` reads acquired facts and emits entities and edges; `store.py`
+writes them. The write deletes first. An opportunity that closed, a co-author
+whose name was corrected upstream, a department that was renamed must all
+*disappear*, and an incremental upsert cannot express that. The graph is one pass
+over facts already in the store, so replacement is affordable and honest.
+
+The projection is deterministic: two builds of an unchanged store produce
+identical entity and edge sets.
+
+### 13.4 Structural measures
+
+`intelligence/network.py`, measured over **co-authorship alone**. Shared
+technique and shared subject are derived similarities, not observed relations,
+and averaging an observation with an inference produces a number that means
+neither.
+
+| measure | what it answers |
+| --- | --- |
+| `degree` / `weighted_degree` | how many partners; how much accumulated tie strength |
+| `betweenness` | who lies on the paths between others |
+| `community` | which cluster this vertex keeps agreeing with |
+| `bridging` | what share of a vertex's tie strength leaves its own community |
+| `external_reach` | what share leaves the indexed faculty entirely |
+
+Betweenness is Brandes over a deterministic sample of source vertices — the
+highest-degree ones, ties broken by id, not a random draw — and normalized to a
+share in [0, 1]. Exact betweenness is O(VE); on a few thousand people that is
+minutes, and the ranking is stable long before the values converge. Below the
+pivot budget the computation is exact.
+
+Communities are weighted label propagation rather than modularity maximisation,
+because label propagation makes no claim to have found an optimum. Modularity
+optima on a graph this sparse move with the resolution parameter, and quoting one
+as *the* community structure would be a stronger claim than the data licenses.
+
+Everything is deterministic. A centrality that changes between two runs on
+unchanged data is not a measurement; an operator who sees a rank move has to be
+able to conclude that the data moved.
+
+**Every normalized share needs a degree floor to be readable.** A co-author who
+appears once, on one paper, with someone outside their cluster has a bridging of
+1.0 and means nothing by it. `graph top` therefore defaults to `--min-degree 3`
+and prints the degree beside the value, so a reader can see what the answer was
+computed over.
+
+---
+
+## 14. The build pipeline
+
+The ordering used to live in one CLI function: `sync all` ran opportunities, then
+exported a seed CSV, then the public scrape, then resolution, then applications,
+then semantics — six steps whose dependencies existed only in the sequence
+someone had typed. Nothing could answer "is the graph stale", and nothing could
+re-run *just* the part that had gone out of date, so the honest options were to
+re-run everything or to guess.
+
+`pipeline/registry.py` declares each stage with what it needs, what it produces,
+and how to tell whether its output still reflects its inputs. The runner does the
+ordering.
+
+```text
+acquire.opportunities ──┬── acquire.professors ──┬── intelligence.metrics ──┐
+                        │                        │                          ├── graph.project ── graph.metrics
+                        │                        └── semantics.space ───────┘
+                        │                                   └── semantics.profile
+                        └── acquire.applications
+```
+
+Freshness is derived from the store, never from a timestamp file. A stage is
+stale when what it wrote disagrees with what it read — which survives someone
+editing the database by hand, moving the project, or restoring a backup.
+
+Five states, and the fourth is the one the module exists for:
+
+| state | meaning |
+| --- | --- |
+| `ok` | current against its inputs |
+| `stale` | its inputs have moved since it ran |
+| `never` | it has not run |
+| `blocked` | fresh *on its own terms*, but sitting below something that is not |
+| `unknown` | the probe could not decide — a broken probe must not hide the pipeline |
+
+`blocked` is the state operators misread. The stage itself is fine; re-running it
+alone would still produce a confident answer from stale inputs, which is worse
+than a missing one because it looks like an answer.
+
+`unknown` covers the case where the data is present but the run that fetched it
+was not journalled — a store bootstrapped from a ledger, or restored from a
+backup taken before the journal existed. Calling that "never acquired" would
+cascade every derived stage into `blocked` on a store that is in fact complete.
+
+Two rules the runner enforces, both because the alternative has already gone
+wrong somewhere in this project's history:
+
+- **A scrape is not a recomputation.** Acquisition stages reach the network, take
+  minutes, and are rate-limited by somebody else's server. They never run because
+  something downstream of them went stale; they run because `--acquire` asked for
+  them.
+- **Nothing runs on stale inputs.** A stage whose dependency failed is skipped,
+  not attempted.
+
+Every stage journals into `sync_runs` — the same table acquisition already wrote
+to — so freshness, history and failure have one home rather than one per
+subsystem.
+
+---
+
+## 15. Database schema (v4)
 
 **Acquired:** `meta`, `professors`, `professor_aliases`, `projects`,
 `opportunities`, `applications`, `sync_runs`, `sigaa_public_*`.
@@ -676,7 +879,14 @@ move every coordinate.
 run/entity/facet/channel/score/percentile), `entity_geometry`, `semantic_topics`
 (with `parent_id`/`depth`), `entity_topics`, `entity_skills`, `professor_evidence`
 (with `scope`), `semantic_benchmarks`, `map_diagnostics`, `professor_metrics`,
-`collaboration_edges`, `global_metrics`, `embedding_cache`.
+`collaboration_edges`, `global_metrics`, `embedding_cache`, and the graph:
+`graph_entities`, `graph_edges`, `entity_metrics` (tall:
+entity/metric/value/extra), `graph_builds`.
+
+The graph is derived by construction — it is a projection of acquired facts, not
+a source of new ones — which puts it in the auto-reconciling block below and
+makes adding a kind, a relation or a measure a zero-migration change. A measure
+is a row, exactly as a channel is a row in `entity_scores`.
 
 **Outreach:** `campaigns` (with `provenance_json`, `theme`),
 `campaign_recipients` (with `rationale_json`), `campaign_messages` (with
@@ -701,10 +911,24 @@ adding a channel a zero-migration change.
 
 ---
 
-## 14. CLI
+## 16. CLI
 
-Grouped by pipeline stage: `sync`, `semantics`, `opportunities`, `professors`,
-`campaign`, `applications`, plus `init`, `doctor`, `dashboard`, `import-ledger`.
+Grouped by subsystem: `sync`, `semantics`, `graph`, `pipeline`, `opportunities`,
+`professors`, `campaign`, `applications`, plus `init`, `doctor`, `dashboard`,
+`import-ledger`.
+
+`pipeline status` is the one to reach for when something looks wrong upstream: it
+prints every declared stage, its state, and why — `--why` adds what each stage is
+for, which matters after a month away. `pipeline explain <stage>` gives that one
+stage's inputs and its blast radius; `pipeline run --dry-run` prints exactly what
+a real invocation would do.
+
+The `graph` group is the structural end: `build` and `measure` recompute,
+`status` reports size and composition, `find` resolves a name to an entity id,
+`show` prints one entity with its measures and neighbourhood, `top` ranks by a
+measure, and `path` finds the strongest short chain between two people. Every
+command that takes an entity accepts a SIAPE or a name fragment, and refuses
+rather than guessing when a fragment is ambiguous.
 
 Exactly two commands change the outside world, and both require `--confirm`:
 `applications apply` and `campaign send`. `campaign send` without it is a dry run
@@ -716,7 +940,7 @@ embedding service health in one table.
 
 ---
 
-## 15. Console
+## 17. Console
 
 A React single-page application served from the standard library.
 `webapp/server.py` is `http.server` and answers JSON out of
@@ -769,7 +993,7 @@ screen keeps its state in the URL, so a view is linkable and survives a reload.
   isolate them.
 - **Network** — the faculty as a graph, over three switchable edge semantics
   (co-authorship, shared technique, shared subject) that disagree in useful ways.
-  Detail in §15.1.
+  Detail in §17.1.
 - **Outreach** — audiences, per-recipient drafts, and the state of every
   conversation. It never sends: that stays at a terminal, behind `--confirm`.
 - **Semantic engine** — benchmarks (with a plain-language note per task), map
@@ -785,7 +1009,7 @@ hands the current URL back to the browser for exactly that.
 The analytical density of the old static `study_landscape.py` is retained; its
 incorrect analytics are not.
 
-### 15.1 The network view
+### 17.1 The network view
 
 Every other screen ranks, and ranking answers *who*. It cannot answer *shape*:
 whether a strong match sits alone or inside a group three of whose members have
@@ -844,7 +1068,7 @@ cutoff either leaves a hairball or strands half the corpus.
 
 ---
 
-## 16. Campaigns and email
+## 18. Campaigns and email
 
 A campaign is a **snapshot**. Creation persists the audience query, the recipient
 set, the exact qualifying opportunities, a `rationale` (primary opportunity,
@@ -861,7 +1085,7 @@ is a new class, not a rewrite.
 
 ---
 
-## 17. Safety boundaries (do not regress these)
+## 19. Safety boundaries (do not regress these)
 
 1. Discovery cannot apply. There is no call path from `sync_opportunities` to
    `apply_one`.
@@ -876,7 +1100,7 @@ is a new class, not a rewrite.
 
 ---
 
-## 18. Operations
+## 20. Operations
 
 ```powershell
 conda activate pegasus
@@ -902,7 +1126,7 @@ while the dashboard is open on the same database.
 
 ---
 
-## 19. Implementation status
+## 21. Implementation status
 
 | Area | Status |
 |---|---|
@@ -925,12 +1149,12 @@ while the dashboard is open on the same database.
 | Acquisition journal (`sync_runs`) | **done** — every sync entry point records start, finish, status and details, including failures; `doctor` shows the latest per source |
 | Delivery path | **done** — verified against an in-process SMTP sink |
 | End-to-end verification | **done** — `init` migration, `semantics build` (space + topics + landscape + skills + 7-task battery + profile run + metrics), `doctor`, ranked opportunity/professor views, audience → campaign → preview → dry-run send, all 21 dashboard queries, Streamlit serving |
-| Live SIGAA regression against the portal | **not re-run this session** (§20) |
+| Live SIGAA regression against the portal | **not re-run this session** (§22) |
 | SMTP end-to-end send | **not exercised** — no SMTP host configured; the dry run is verified |
 
 ---
 
-## 20. Known problems register
+## 22. Known problems register
 
 1. **Live SIGAA paths are untested this session.** The automation was restructured
    (module moved, credential lookup now config-driven) but not run against the
@@ -953,11 +1177,11 @@ while the dashboard is open on the same database.
    offer work plans.** Lattes gives no methodology text. This is a data limit, not
    a bug, but the UI should say so more loudly than it does.
 6. **No outcome tracking.** History records what was sent, not what came back
-   (reply, meeting, acceptance). §21.
+   (reply, meeting, acceptance). §23.
 7. **Single-letter skill matching is heuristic.** The capital-`R` rule is right
    nearly always; the exclusion list is empirical and will need extending.
 8. **`joint_svd` fusion is implemented and benchmarked but not the default.** See
-   §22 for the decision.
+   §24 for the decision.
 9. **Root topic count is 3 per facet**, at the floor of the configured range. The
     hierarchy that results is genuinely interpretable (public health / EB wounds /
     cellular effects, each splitting into four), but the selection score should be
@@ -970,7 +1194,7 @@ while the dashboard is open on the same database.
 
 ---
 
-## 21. Future work
+## 23. Future work
 
 **Near term**
 - Outcome tracking: reply / meeting / accepted / declined per campaign recipient,
@@ -1001,7 +1225,7 @@ while the dashboard is open on the same database.
 
 ---
 
-## 22. Decision log
+## 24. Decision log
 
 **D1 — SPPMI+SVD replaces LSA as the default latent representation.**
 Evidence §8.4. ppmi300 matches or beats lsa384 on five of seven tasks at half the
@@ -1279,9 +1503,62 @@ time. One sentence states that the work is computational, names the two years of
 continuous practice in data science, epidemiology and scientific computing, and
 says where the return is highest — phrased as work done, not as a post held.
 
+**D42 — The platform is the product; outreach is an application on it.**
+`outreach/` moved to `apps/outreach/`, and nothing above `apps/` may import it.
+The concrete failure this fixes: `webapp/payloads.py` — the console's serving
+layer — imported `outreach/nomes.py` to recover a professor's accented name, so
+a page rendering a ranking reached into the email package to find out what to
+call someone. Name resolution is entity identity; it lives in `graph/identity.py`
+now. The templates moved with the application that owns them.
+
+**D43 — A typed, provenanced entity graph, projected rather than accumulated.**
+People were rows in `professors`, collaboration was a count in
+`collaboration_edges`, and orgs existed only as a string on a professor. Nothing
+could be asked a structural question. `graph/` gives one id space (`kind:key`,
+accent-folded), one relation vocabulary with enforced endpoints, and a
+replacement-write projection. Weight sums across facts implying the same
+relation; symmetric ties are stored once and expanded on read. The graph is
+derived, so it costs no migration and can be rebuilt at will.
+
+**D44 — External co-authors are named nodes, and the weakness is recorded.**
+`person:name-<slug>` for anyone with no reachable registry number. Two people
+publishing under one name become one node; one person under two spellings becomes
+two. `is_indexed_person()` exists so a measure can tell the classes apart rather
+than averaging over them, and the limitation is written down instead of hidden.
+
+**D45 — Structural measures are computed over co-authorship alone.**
+Shared technique and shared subject are derived similarities, not observed
+relations. Mixing an observation with an inference into one centrality produces a
+number that means neither, so `graph.metrics` measures `collaborates_with` and
+nothing else. Everything is deterministic — sampled Brandes with high-degree
+pivots rather than a random draw, label propagation with ties broken by smallest
+label — because a rank that moves must mean the data moved.
+
+**D46 — Every normalized share is reported with the degree it was computed over.**
+Bridging and external reach are trivially extreme on a vertex with two ties: a
+co-author who appears once, with one person outside their cluster, scores a
+perfect 1.0 and means nothing by it. `graph top` defaults to `--min-degree 3` and
+prints degree beside the value. Filtering silently would have been worse than the
+noise.
+
+**D47 — Build order is declared, not typed.**
+`sync all` encoded its dependencies in the sequence a human had written them,
+which made "is the graph stale" and "what does re-running this invalidate"
+unanswerable. Stages now declare `depends_on`, `produces` and a freshness probe
+derived from the store; the runner orders them. Acquisition is flagged, and never
+runs because something downstream went stale.
+
+**D48 — `blocked` is a state, and so is `unknown`.**
+A stage that is fresh on its own terms but sits below a stale one is not `ok`:
+re-running it alone would produce a confident answer from stale inputs, which is
+worse than a missing one because it looks like an answer. And data present
+without a journalled run is `unknown`, not `never` — a store bootstrapped from a
+ledger has the rows without the run that fetched them, and calling that "never
+acquired" would cascade a complete store into `blocked`.
+
 ---
 
-## 23. Final note to the next agent
+## 25. Final note to the next agent
 
 Do not preserve a weak design because it is described here. Do not add complexity
 without a benchmark that justifies it. Do not touch the SIGAA automation without

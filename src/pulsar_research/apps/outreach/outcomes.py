@@ -26,7 +26,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from ..db import Database
+from ...db import Database
 
 #: In funnel order. `ORDER` is what the UI sorts and groups by.
 STATES: tuple[str, ...] = ("awaiting", "replied", "open", "declined", "indicated", "closed")

@@ -135,7 +135,7 @@ def build(db: Database, mode: str, *, display_name=None) -> dict[str, Any]:
     """Nodes and edges for one graph, plus what the legend needs to explain it."""
     mode = mode if mode in MODES else "collaboration"
     from ..dashboard.queries import Repository
-    from ..outreach import outcomes as oc
+    from ..apps.outreach import outcomes as oc
 
     repo = Repository(db)
     professors = repo.professors()

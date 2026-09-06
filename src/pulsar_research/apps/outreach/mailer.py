@@ -26,8 +26,8 @@ from email.utils import formataddr, make_msgid
 from pathlib import Path
 from typing import Any, Iterable, Protocol
 
-from ..config import AppConfig
-from ..db import Database, utcnow
+from ...config import AppConfig
+from ...db import Database, utcnow
 
 
 MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024  # Gmail rejects over ~25 MB

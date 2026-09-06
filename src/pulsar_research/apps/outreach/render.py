@@ -15,12 +15,12 @@ from typing import Any, Mapping
 
 from jinja2 import Environment, StrictUndefined, Undefined
 
-from ..semantics.normalize import display_person_name
+from ...semantics.normalize import display_person_name
 from .caixa import desgritar
 from .panels import decimal
 from .saudacao import saudacao
 
-TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
+TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
 
 def _milhar(value) -> str:

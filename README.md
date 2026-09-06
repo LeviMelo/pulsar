@@ -1,9 +1,10 @@
 # PULSAR
 
-Local research-intelligence and opportunity-prospecting system for the UFAL/SIGAA
-research ecosystem. It acquires research opportunities and professor portfolios,
-builds an inspectable semantic model over them, ranks and explains what is worth
-pursuing, and turns that into deliberate, individually reviewed outreach.
+A local platform for modelling an academic research ecosystem — currently
+UFAL/SIGAA. It acquires opportunities and professor portfolios, builds an
+inspectable semantic model over them, projects everything into a typed entity
+graph, measures that graph's structure, and keeps the whole derivation honest
+about what is stale.
 
 Everything runs on one machine. No data leaves it; the only network calls are to
 SIGAA (to read what you can already read while logged in), to a local embedding
@@ -13,10 +14,23 @@ server, and to your own SMTP relay when you explicitly send a campaign.
 known-problems register. Read it before changing anything substantial.
 
 ```text
-DATA ACQUISITION → NORMALIZATION + PROVENANCE → RESEARCH INTELLIGENCE
-   → SEARCH / MATCHING / LANDSCAPE → PROSPECTING → AUDIENCE
-   → CAMPAIGN → INDIVIDUAL DRAFTS → MANUAL REVIEW → EXPLICIT OUTREACH → HISTORY
+┌─ PLATFORM ────────────────────────────────────────────────────────────┐
+│  ACQUISITION → NORMALIZATION + PROVENANCE → THE CORPUS                │
+│       ↓                                                               │
+│  SEMANTIC SPACE → ranking, evidence, topics, skills, landscape        │
+│       ↓                                                               │
+│  ENTITY GRAPH → centrality, communities, bridging, reach, paths       │
+│       ↓                                                               │
+│  PIPELINE → what is stale, what would run, what re-running breaks     │
+└───────────────────────────────────────────────────────────────────────┘
+                                   ↓
+┌─ APPLICATIONS ────────────────────────────────────────────────────────┐
+│  the console  ·  outreach (audience → drafts → review → explicit send)│
+└───────────────────────────────────────────────────────────────────────┘
 ```
+
+The split is enforced, not aspirational: nothing above `apps/` may import
+anything inside it. The platform does not know that anybody is ever written to.
 
 ## Install
 
@@ -74,7 +88,22 @@ pulsar sync all                     # acquire everything, then rebuild semantics
 pulsar semantics build              # fit the semantic space + benchmark + score
 pulsar semantics profile            # re-score after editing config/profile.yaml
 pulsar semantics status             # active space/run, benchmarks, map fidelity, topics
+pulsar pipeline status              # every stage: current, stale, blocked, or never run
+pulsar pipeline run                 # rebuild whatever is stale, in dependency order
 pulsar dashboard                    # the operator console, at localhost:8787
+```
+
+`pipeline status` is the honest picture of the derived store. Each stage declares
+what it needs, what it produces, and how to tell whether its output still
+reflects its inputs — so `blocked` means "fresh on its own terms, but sitting
+below something that is not", which is the state worth catching. Acquisition
+never runs unless asked:
+
+```powershell
+pulsar pipeline status --why        # plus what each stage is for
+pulsar pipeline explain graph.project   # its inputs, and its blast radius
+pulsar pipeline run --dry-run       # exactly what a real run would do
+pulsar pipeline run --acquire       # include the scrapes (minutes; someone else's server)
 ```
 
 Ad-hoc retrieval, on the fitted space (a query never refits anything):
@@ -93,6 +122,32 @@ pulsar professors list --scope current      # who can supervise this right now
 pulsar professors list --scope trajectory   # who thinks about the same problems
 pulsar professors show 1157495              # portfolio + the evidence behind the rank
 ```
+
+## The network
+
+Ranking answers "who fits". The graph answers the questions a ranked table
+cannot: who bridges two groups that otherwise do not talk, which clusters the
+faculty actually decomposes into, whose collaboration reaches outside the
+institution, and how you would get an introduction.
+
+```powershell
+pulsar graph build                          # project acquired facts into the graph
+pulsar graph measure                        # centrality, communities, bridging, reach
+pulsar graph status                         # size, composition, freshness
+pulsar graph find nobrega                   # name → entity id
+pulsar graph show 1157495                   # one entity: measures + neighbourhood
+pulsar graph top bridging --min-degree 8    # who routes work outside their own cluster
+pulsar graph path 1157495 "Ana Malhado"     # the strongest short chain between two people
+```
+
+Every command that takes an entity accepts a SIAPE, an entity id or a name
+fragment, and refuses rather than guessing when a fragment is ambiguous.
+
+Structural measures are computed over co-authorship alone — shared technique and
+shared subject are inferred similarities, not observed ties, and mixing them into
+one centrality gives a number that means neither. Shares like `bridging` are
+trivially 1.0 on a vertex with two neighbours, so `graph top` applies a degree
+floor and prints the degree beside the value.
 
 ## Acquisition
 

@@ -8,9 +8,9 @@ annexes carry no highlight.
 """
 from __future__ import annotations
 
-from pulsar_research.outreach.caixa import desgritar, esta_gritando
-from pulsar_research.outreach.nomes import dobrar
-from pulsar_research.outreach.render import _limpo, _minuscula, _resumo, _siglas
+from pulsar_research.apps.outreach.caixa import desgritar, esta_gritando
+from pulsar_research.graph.identity import fold as dobrar
+from pulsar_research.apps.outreach.render import _limpo, _minuscula, _resumo, _siglas
 
 from test_render import body, render
 
@@ -103,7 +103,7 @@ def test_folding_ignores_accents_case_and_punctuation_but_not_missing_names():
 
 
 def test_the_salutation_prefers_the_recovered_spelling_over_the_matching_key():
-    from pulsar_research.outreach.render import build_context
+    from pulsar_research.apps.outreach.render import build_context
     from test_render import PROFILE, SIGNATURE, recipient
 
     plain = recipient(98.0)

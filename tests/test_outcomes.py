@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from pulsar_research.outreach import outcomes as oc
+from pulsar_research.apps.outreach import outcomes as oc
 
 
 @pytest.fixture()

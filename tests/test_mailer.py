@@ -142,7 +142,7 @@ def campaign(tmp_path):
 
 
 def test_without_confirm_nothing_is_sent(config, campaign, sink):
-    from pulsar_research.outreach.mailer import send_campaign
+    from pulsar_research.apps.outreach.mailer import send_campaign
 
     result = send_campaign(config, campaign, "c1")
     assert result["dry_run"] is True and result["sent"] == 0
@@ -151,7 +151,7 @@ def test_without_confirm_nothing_is_sent(config, campaign, sink):
 
 
 def test_only_selected_recipients_are_sent(config, campaign, sink):
-    from pulsar_research.outreach.mailer import send_campaign
+    from pulsar_research.apps.outreach.mailer import send_campaign
 
     result = send_campaign(config, campaign, "c1", confirm=True)
     assert (result["sent"], result["failed"]) == (1, 0)
@@ -161,7 +161,7 @@ def test_only_selected_recipients_are_sent(config, campaign, sink):
 
 
 def test_message_is_multipart_alternative_with_a_real_text_part(config, campaign, sink):
-    from pulsar_research.outreach.mailer import send_campaign
+    from pulsar_research.apps.outreach.mailer import send_campaign
 
     send_campaign(config, campaign, "c1", confirm=True)
     msg = email.message_from_bytes(sink.messages[0])
@@ -176,7 +176,7 @@ def test_message_is_multipart_alternative_with_a_real_text_part(config, campaign
 
 
 def test_a_sent_message_is_never_sent_twice(config, campaign, sink):
-    from pulsar_research.outreach.mailer import pending_messages, send_campaign
+    from pulsar_research.apps.outreach.mailer import pending_messages, send_campaign
 
     first = send_campaign(config, campaign, "c1", confirm=True)
     second = send_campaign(config, campaign, "c1", confirm=True)
@@ -187,7 +187,7 @@ def test_a_sent_message_is_never_sent_twice(config, campaign, sink):
 
 
 def test_a_message_that_never_left_is_not_recorded_as_sent(config, campaign, sink):
-    from pulsar_research.outreach.mailer import send_campaign
+    from pulsar_research.apps.outreach.mailer import send_campaign
 
     sink.close()  # the provider cannot open a session at all
     with pytest.raises(Exception):
@@ -200,7 +200,7 @@ def test_annexes_ride_along_and_are_verified_before_the_first_send(config, campa
     """A missing annex must stop the campaign, not appear on recipient 40 of 62."""
     import json
 
-    from pulsar_research.outreach.mailer import campaign_attachments, send_campaign
+    from pulsar_research.apps.outreach.mailer import campaign_attachments, send_campaign
 
     annex = tmp_path / "relatorio.pdf"
     annex.write_bytes(b"%PDF-1.7\nfake report\n%%EOF")
@@ -223,7 +223,7 @@ def test_annexes_ride_along_and_are_verified_before_the_first_send(config, campa
 def test_an_oversized_annex_is_refused_rather_than_bounced(config, campaign, tmp_path, monkeypatch):
     import json
 
-    from pulsar_research.outreach import mailer
+    from pulsar_research.apps.outreach import mailer
 
     big = tmp_path / "big.pdf"
     big.write_bytes(b"0" * 2048)
@@ -236,7 +236,7 @@ def test_an_oversized_annex_is_refused_rather_than_bounced(config, campaign, tmp
 
 def test_doctor_style_verification_authenticates_instead_of_checking_for_a_string(config, sink):
     """A set-but-wrong password must read as not ready, not as ready."""
-    from pulsar_research.outreach.mailer import SMTPProvider
+    from pulsar_research.apps.outreach.mailer import SMTPProvider
 
     ok, detail = SMTPProvider(config).verify_credentials()
     assert ok and "no credentials set" in detail, "the sink needs no credentials"
@@ -248,7 +248,7 @@ def test_doctor_style_verification_authenticates_instead_of_checking_for_a_strin
 
 
 def test_an_unconfigured_relay_is_reported_rather_than_assumed_working(config):
-    from pulsar_research.outreach.mailer import SMTPProvider
+    from pulsar_research.apps.outreach.mailer import SMTPProvider
 
     config.raw["smtp"]["host"] = ""
     ok, detail = SMTPProvider(config).verify_credentials()

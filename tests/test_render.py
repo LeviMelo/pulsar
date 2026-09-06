@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from pulsar_research.outreach.panels import benchmark_summary
-from pulsar_research.outreach.render import (MAX_CONTRIBUTIONS, STRONG_FIT_PERCENTILE,
+from pulsar_research.apps.outreach.panels import benchmark_summary
+from pulsar_research.apps.outreach.render import (MAX_CONTRIBUTIONS, STRONG_FIT_PERCENTILE,
                                              build_context, read_template, render_message,
                                              select_annexes, select_contributions)
 

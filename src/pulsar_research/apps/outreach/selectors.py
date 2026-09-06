@@ -17,9 +17,9 @@ from typing import Any, Sequence
 
 import pandas as pd
 
-from ..db import Database, json_load
-from ..semantics.provenance import current_run_id
-from .nomes import accented_names
+from ...db import Database, json_load
+from ...semantics.provenance import current_run_id
+from ...graph.identity import accented_names
 
 
 @dataclass(slots=True)

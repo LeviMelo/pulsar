@@ -22,7 +22,7 @@ import pandas as pd
 
 from ..dashboard.queries import Repository, lorenz
 from ..db import Database, json_load
-from ..outreach.nomes import accented_names
+from ..graph.identity import Names
 from ..semantics.normalize import display_person_name
 
 
@@ -104,20 +104,16 @@ class Payloads:
     def __init__(self, db: Database):
         self.db = db
         self.repo = Repository(db)
-        self._names: dict[str, str] | None = None
+        self._names: Names | None = None
 
     # `professors.canonical_name` is a matching key: lowercased, accents
     # stripped. Showing it raw makes the console address people as "diego
-    # figueiredo nobrega". The Lattes record has the real spelling, and the
-    # outreach layer already knows how to recover it safely.
+    # figueiredo nobrega". Recovering the real spelling is entity identity, so
+    # the resolver comes from the graph layer rather than from outreach.
     def display_name(self, siape: Any, fallback: Any = "") -> str:
         if self._names is None:
-            try:
-                self._names = accented_names(self.db)
-            except Exception:
-                self._names = {}
-        recovered = self._names.get(str(siape))
-        return recovered or display_person_name(str(fallback or ""))
+            self._names = Names(self.db)
+        return self._names.display(siape, fallback)
 
     # -- shell ------------------------------------------------------------
 
@@ -268,8 +264,8 @@ class Payloads:
 
     def campaign(self, campaign_id: str) -> dict[str, Any]:
         """One campaign: the frozen audience, every draft, and where it now stands."""
-        from ..outreach import outcomes as oc
-        from ..outreach.campaigns import campaign_rows, campaign_summary
+        from ..apps.outreach import outcomes as oc
+        from ..apps.outreach.campaigns import campaign_rows, campaign_summary
 
         summary = campaign_summary(self.db, campaign_id)
         recorded = oc.outcomes(self.db, campaign_id)
