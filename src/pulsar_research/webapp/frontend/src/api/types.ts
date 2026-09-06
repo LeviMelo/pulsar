@@ -315,3 +315,164 @@ export interface PipelineStage {
 export interface PipelinePayload {
   stages: PipelineStage[];
 }
+
+/* ----------------------------------------------------- the store, opened */
+
+export type Family =
+  | 'work' | 'technical' | 'project' | 'line' | 'career' | 'activity' | 'degree'
+  | 'training' | 'committee' | 'supervision' | 'event' | 'award' | 'course'
+  | 'language' | 'area';
+
+/** A record as a list row: enough to scan, sort and open. */
+export interface RecordRow {
+  record_id: string;
+  siape: string;
+  subject: string;
+  family: Family;
+  form: string;
+  title: string;
+  year: number | null;
+  year_end: number | null;
+  status: string;
+  org: string;
+  counterpart: string;
+  venue: string;
+  nature: string;
+  doi: string;
+  source: string;
+  people: number;
+  keywords: string[];
+}
+
+export interface RecordPerson {
+  name: string;
+  cnpq_id: string;
+  ordinal: number;
+  role: string;
+  siape: string | null;
+  entity_id: string | null;
+  display?: string;
+}
+
+export interface RecordDetail extends Omit<RecordRow, 'people' | 'keywords'> {
+  org_code: string;
+  counterpart_id: string;
+  language: string;
+  keywords: string[];
+  areas: string[];
+  people: RecordPerson[];
+  payload: Record<string, unknown>;
+  source_ref: string;
+  entity_id: string | null;
+}
+
+export interface RecordsPayload {
+  rows: RecordRow[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface FamilyFacet {
+  family: Family;
+  meaning: string;
+  count: number;
+  from: number | null;
+  to: number | null;
+}
+
+export interface FacetsPayload {
+  families: FamilyFacet[];
+  forms: { family: Family; form: string; count: number }[];
+  years: { year: number; family: Family; count: number }[];
+  orgs: { org: string; count: number }[];
+  venues: { venue: string; count: number }[];
+  meanings: Record<string, string>;
+  summary: {
+    built: boolean;
+    created_at: string | null;
+    fingerprint_current: boolean;
+    stats: { records?: number; people?: number; families?: Record<string, number> };
+  };
+}
+
+export interface Company {
+  name: string;
+  display: string;
+  normalized_name: string;
+  cnpq_id: string;
+  count: number;
+  first_year: number | null;
+  last_year: number | null;
+  families: string[];
+  roles: string[];
+  spellings: string[];
+  siape: string | null;
+  entity_id: string | null;
+}
+
+export interface PortfolioPayload {
+  siape: string;
+  name: string;
+  facets: Omit<FacetsPayload, 'meanings' | 'summary'>;
+  records: RecordRow[];
+  people: Company[];
+  career: RecordDetail[];
+}
+
+export interface EntityNode {
+  entity_id: string;
+  kind: string;
+  key: string;
+  name: string;
+  payload: Record<string, unknown>;
+  sources: string[];
+  siape?: string;
+}
+
+export interface NeighbourGroup {
+  relation: string;
+  direction: 'in' | 'out';
+  label: string;
+  count: number;
+  rows: {
+    entity_id: string; kind: string; name: string; indexed: boolean;
+    weight: number; year: number | null;
+  }[];
+}
+
+export interface EntityPayload {
+  entity: EntityNode;
+  metrics: Record<string, number>;
+  groups: NeighbourGroup[];
+  records: RecordRow[];
+}
+
+export interface SearchPayload {
+  professors: { siape: string; name: string; department?: string | null; center?: string | null }[];
+  records: RecordRow[];
+  records_total?: number;
+  entities: { entity_id: string; kind: string; name: string }[];
+}
+
+export interface SourceRow {
+  id: string;
+  title: string;
+  provider: string;
+  method: string;
+  access: string;
+  reaches_network: boolean;
+  stage: string;
+  yields: string[];
+  depends_on: string[];
+  secrets: string[];
+  rate: string;
+  cost: string;
+  why: string;
+  ready: boolean;
+  problems: string[];
+  changed: string | null;
+  last_run: { status: string; finished_at: string; rows: Record<string, number>; error: string } | null;
+}
+
+export interface SourcesPayload { sources: SourceRow[] }

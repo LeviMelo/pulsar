@@ -23,7 +23,12 @@ export type Frame =
   | { kind: 'professor'; id: string; label?: string; tab?: ProfessorTab;
       summary?: Record<string, unknown> }
   | { kind: 'plan'; id: string; label?: string }
-  | { kind: 'message'; campaign: string; siape: string; label?: string };
+  | { kind: 'message'; campaign: string; siape: string; label?: string }
+  // The store, opened: one extracted record, one graph entity, or every
+  // record matching a filter (the way "everything naming this person" opens).
+  | { kind: 'record'; id: string; label?: string }
+  | { kind: 'entity'; id: string; label?: string }
+  | { kind: 'search'; person?: string; q?: string; family?: string; label?: string };
 
 export interface RailStack {
   frames: readonly Frame[];

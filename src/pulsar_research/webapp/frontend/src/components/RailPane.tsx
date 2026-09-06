@@ -42,5 +42,6 @@ export function RailPane({ stack, rootLabel, root, here, extraTabs }: {
 
 function frameKey(frame: RailStack['frames'][number]): string {
   if (frame.kind === 'message') return `message:${frame.campaign}:${frame.siape}`;
+  if (frame.kind === 'search') return `search:${frame.person || ''}:${frame.q || ''}:${frame.family || ''}`;
   return `${frame.kind}:${frame.id}`;
 }

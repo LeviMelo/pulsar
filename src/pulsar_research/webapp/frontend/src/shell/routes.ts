@@ -30,6 +30,10 @@ export const ROUTES: readonly RouteSpec[] = [
     badge: 'professors',
   },
   {
+    id: 'explore', label: 'Explore', title: 'Explore the store',
+    sub: 'Every record on file — works, boards, students, appointments, courses — searchable, and every institution, venue and co-author openable.',
+  },
+  {
     id: 'landscape', label: 'Landscape', title: 'Research landscape',
     sub: 'What this ecosystem studies, how it is organised, and how the map should be read.',
   },

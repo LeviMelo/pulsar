@@ -8,7 +8,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useOpportunities, useProfessors } from '../api/client';
+import { useOpportunities, useProfessors, useSearchAll } from '../api/client';
+import { familyLabel } from '../components/records/store';
+import { short } from '../lib/format';
 import { pathTo } from '../lib/params';
 import { ROUTES } from './routes';
 
@@ -24,6 +26,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   // cached payloads rather than asking the server twice.
   const { data: opps } = useOpportunities();
   const { data: profs } = useProfessors();
+  // Records, institutions, venues and co-authors live on the server: forty
+  // thousand rows are not worth holding in a palette.
+  const { data: remote } = useSearchAll(query);
 
   const items = useMemo<Item[]>(() => [
     ...ROUTES.map((r) => ({ kind: 'section', label: r.title, to: pathTo(r.id) })),
@@ -46,8 +51,23 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     const pool = needle
       ? items.filter((i) => `${i.label} ${i.hint || ''}`.toLowerCase().includes(needle))
       : items.filter((i) => i.kind === 'section');
-    return pool.slice(0, 40);
-  }, [items, query]);
+    const served: Item[] = needle && remote ? [
+      ...remote.entities.map((e) => ({
+        kind: e.kind, label: e.name, hint: e.kind === 'person' ? 'named on records' : undefined,
+        to: pathTo('explore', { entity: e.entity_id }),
+      })),
+      ...remote.records.map((r) => ({
+        kind: familyLabel(r.family).toLowerCase(), label: short(r.title, 90),
+        hint: [r.year, r.subject].filter(Boolean).join(' · '),
+        to: pathTo('explore', { sel: r.record_id }),
+      })),
+      ...(remote.records_total && remote.records_total > remote.records.length ? [{
+        kind: 'search', label: `All ${remote.records_total} records matching “${query.trim()}”`,
+        to: pathTo('explore', { q: query.trim() }),
+      }] : []),
+    ] : [];
+    return [...pool.slice(0, 24), ...served].slice(0, 60);
+  }, [items, query, remote]);
 
   useEffect(() => { setCursor(0); }, [query]);
   useEffect(() => {
@@ -64,7 +84,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     }}>
       <div className="palette-box" role="dialog" aria-modal="true" aria-label="Jump to">
         <input ref={input} type="text" value={query} autoComplete="off" spellCheck={false}
-               placeholder="Jump to a work plan, professor or section…"
+               placeholder="A professor, a plan, a paper, a journal, an institution, a co-author…"
                onChange={(e) => setQuery(e.target.value)}
                onKeyDown={(event) => {
                  if (event.key === 'ArrowDown') {

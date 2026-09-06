@@ -7,6 +7,7 @@ import { Shell } from './shell/Shell';
 import { Overview } from './views/Overview';
 import { Opportunities } from './views/Opportunities';
 import { Professors } from './views/Professors';
+import { Explore } from './views/Explore';
 import { Landscape } from './views/Landscape';
 import { Network } from './views/Network';
 import { Campaigns } from './views/Campaigns';
@@ -29,6 +30,7 @@ const router = createHashRouter([
       { path: 'overview', element: <Overview />, errorElement: <ViewError /> },
       { path: 'opportunities', element: <Opportunities />, errorElement: <ViewError /> },
       { path: 'professors', element: <Professors />, errorElement: <ViewError /> },
+      { path: 'explore', element: <Explore />, errorElement: <ViewError /> },
       { path: 'landscape', element: <Landscape />, errorElement: <ViewError /> },
       { path: 'network', element: <Network />, errorElement: <ViewError /> },
       { path: 'campaigns', element: <Campaigns />, errorElement: <ViewError /> },

@@ -7,8 +7,8 @@
  */
 
 import { useState } from 'react';
-import { useEngine, usePipeline } from '../api/client';
-import type { EnginePayload, PipelineStage, StageState } from '../api/types';
+import { useEngine, usePipeline, useSources } from '../api/client';
+import type { EnginePayload, PipelineStage, StageState, SourceRow } from '../api/types';
 import { BarsH, GroupedBars } from '../components/charts';
 import { copyText } from '../components/records';
 import { Table } from '../components/Table';
@@ -234,6 +234,54 @@ const STAGE_MEANING: Record<StageState, string> = {
   unknown: 'the check could not decide',
 };
 
+function Sources() {
+  const { data, error, isPending } = useSources();
+  if (isPending) return <Loading />;
+  if (error || !data) return <Banner tone="bad"><div>{String((error as Error)?.message || error)}</div></Banner>;
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <p className="panel-note" style={{ marginBottom: '12px' }}>
+        Where the data comes from. Each source declares how it is reached — a driven
+        browser, a public crawl, an object embedded in that crawl, a file on disk — what
+        it needs from the operator, and what tables it owns. A source that reaches the
+        network runs only when asked for by name.
+      </p>
+      <Table rows={data.sources} rowKey={(r) => r.id} columns={[
+        { key: 'id', label: 'Source', width: '170px', sortable: false,
+          render: (r: SourceRow) => (
+            <span><span className="mono">{r.id}</span><div className="muted">{r.title}</div></span>
+          ) },
+        { key: 'method', label: 'How', width: '150px', sortable: false,
+          render: (r: SourceRow) => (
+            <span>{r.method.replace('_', ' ')}{r.reaches_network ? <span className="muted"> · network</span> : null}
+              <div className="muted">{r.access}{r.cost ? ` · ${r.cost}` : ''}</div></span>
+          ) },
+        { key: 'ready', label: 'Ready', width: '120px', sortable: false,
+          render: (r: SourceRow) => r.problems.length
+            ? <Chip tone="warn" title={r.problems.join('; ')}>no</Chip>
+            : r.changed ? <Chip tone="warn" title={r.changed}>input changed</Chip>
+            : <Chip tone="good">yes</Chip> },
+        { key: 'last', label: 'Last run', sortable: false,
+          render: (r: SourceRow) => r.last_run
+            ? (
+              <span>
+                <Chip tone={r.last_run.status === 'ok' ? 'good' : 'bad'}>{r.last_run.status}</Chip>
+                <span className="muted"> {String(r.last_run.finished_at).slice(0, 16).replace('T', ' ')}</span>
+                {Object.keys(r.last_run.rows).length > 0 && (
+                  <div className="muted mono">
+                    {Object.entries(r.last_run.rows).slice(0, 4).map(([k, v]) => `${k} ${v}`).join(' · ')}
+                  </div>
+                )}
+              </span>
+            )
+            : <span className="muted">never journalled</span> },
+        { key: 'yields', label: 'Owns', sortable: false,
+          render: (r: SourceRow) => <span className="muted mono">{r.yields.join(', ')}</span> },
+      ]} />
+    </div>
+  );
+}
+
 function Freshness() {
   const { data, error, isPending } = usePipeline();
   if (isPending) return <Loading />;
@@ -246,6 +294,7 @@ function Freshness() {
 
   return (
     <div>
+      <Sources />
       <p className="panel-note" style={{ marginBottom: '12px' }}>
         Each stage declares what it needs, what it produces, and how to tell whether its
         output still reflects its inputs — read from the store, never from a timestamp

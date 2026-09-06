@@ -113,6 +113,24 @@ class Console:
             # point is to have changed since the page was opened — a `pulsar
             # pipeline run` in another window must show up on a reload.
             return self.payloads.pipeline()
+        # -- the store, opened: records, portfolios, entities, one search ------
+        if parts == ["api", "records"]:
+            return self.payloads.explorer.search(query)
+        if parts == ["api", "records", "facets"]:
+            siape = (query.get("siape") or [""])[0]
+            return self.cache.get(f"facets:{siape}", lambda: self.payloads.explorer.facets(siape))
+        if len(parts) == 3 and parts[:2] == ["api", "record"]:
+            return self.payloads.explorer.record(parts[2]) or _missing("record", parts[2])
+        if len(parts) == 4 and parts[:2] == ["api", "professor"] and parts[3] == "portfolio":
+            return self.cache.get(f"portfolio:{parts[2]}",
+                                  lambda: self.payloads.explorer.portfolio(parts[2]))
+        if len(parts) == 3 and parts[:2] == ["api", "entity"]:
+            return self.payloads.explorer.entity(parts[2]) or _missing("entity", parts[2])
+        if parts == ["api", "search"]:
+            return self.payloads.explorer.search_all((query.get("q") or [""])[0])
+        if parts == ["api", "sources"]:
+            from ..sources import describe
+            return {"sources": describe(self.config, self.db)}
         if len(parts) == 3 and parts[:2] == ["api", "opportunity"]:
             return self.payloads.opportunity(parts[2]) or _missing("work plan", parts[2])
         if len(parts) == 3 and parts[:2] == ["api", "professor"]:

@@ -23,6 +23,9 @@ import { LeaveLink, type Frame, type ProfessorTab } from '../Rail';
 import {
   Chip, Empty, Field, FieldBlock, Loading, Stat, Tabs, type Tone,
 } from '../ui';
+import {
+  CareerTab, EntityFrame, PeopleTab, PortfolioTab, RecordFrame, SearchFrame,
+} from './store';
 
 export const STATE_LABEL: Record<ThreadState, string> = {
   awaiting: 'written to, no reply yet',
@@ -87,6 +90,9 @@ export function ProfessorRecord({
 
   const items: (readonly [string, ReactNode])[] = [
     ['profile', 'Profile'],
+    ['portfolio', 'Portfolio'],
+    ['people', 'People'],
+    ['career', 'Career'],
     ['plans', `Plans (${num(plans.length)})`],
     ['skills', `Techniques (${num(distinctive.length)})`],
     ['evidence', 'Why this rank'],
@@ -150,6 +156,9 @@ function BuiltinTab({ tab, detail, summary, ctx }: {
   ctx: RecordContext;
 }) {
   if (tab === 'plans') return <PlansTab detail={detail} ctx={ctx} />;
+  if (tab === 'portfolio') return <PortfolioTab siape={detail.record.siape} ctx={ctx} />;
+  if (tab === 'people') return <PeopleTab siape={detail.record.siape} ctx={ctx} />;
+  if (tab === 'career') return <CareerTab siape={detail.record.siape} ctx={ctx} />;
   if (tab === 'skills') return <SkillsTab detail={detail} />;
   if (tab === 'evidence') return <EvidenceTab detail={detail} />;
   return <ProfileTab detail={detail} summary={summary} />;
@@ -407,6 +416,9 @@ export function FrameView({ frame, ctx, onTab, extraTabs }: {
     );
   }
   if (frame.kind === 'plan') return <PlanFrame id={frame.id} ctx={ctx} />;
+  if (frame.kind === 'record') return <RecordFrame id={frame.id} ctx={ctx} />;
+  if (frame.kind === 'entity') return <EntityFrame id={frame.id} ctx={ctx} />;
+  if (frame.kind === 'search') return <SearchFrame frame={frame} ctx={ctx} />;
   return <MessageFrame campaign={frame.campaign} siape={frame.siape} ctx={ctx} />;
 }
 

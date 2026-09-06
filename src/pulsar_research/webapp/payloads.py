@@ -105,6 +105,8 @@ class Payloads:
         self.db = db
         self.repo = Repository(db)
         self._names: Names | None = None
+        from .explore import Explorer
+        self.explorer = Explorer(db, self.display_name)
 
     # `professors.canonical_name` is a matching key: lowercased, accents
     # stripped. Showing it raw makes the console address people as "diego

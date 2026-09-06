@@ -141,3 +141,88 @@ export function useSaveOutcome(campaignId: string | null) {
     },
   });
 }
+
+/* ----------------------------------------------------- the store, opened */
+
+import type {
+  EntityPayload, FacetsPayload, PortfolioPayload, RecordDetail, RecordsPayload,
+  SearchPayload, SourcesPayload,
+} from './types';
+
+export type RecordsQuery = Partial<Record<
+  'q' | 'family' | 'form' | 'siape' | 'since' | 'until' | 'org' | 'person' | 'limit' | 'offset',
+  string | number>>;
+
+function queryString(query: Record<string, string | number | undefined>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== '' && value !== null) params.set(key, String(value));
+  }
+  const text = params.toString();
+  return text ? `?${text}` : '';
+}
+
+export function useRecords(query: RecordsQuery, enabled = true) {
+  return useQuery({
+    queryKey: ['records', query],
+    queryFn: () => fetchJson<RecordsPayload>(`/api/records${queryString(query)}`),
+    enabled,
+    placeholderData: (previous) => previous,
+    ...STATIC_QUERY,
+  });
+}
+
+export function useRecordFacets(siape = '') {
+  return useQuery({
+    queryKey: ['records-facets', siape],
+    queryFn: () => fetchJson<FacetsPayload>(`/api/records/facets${queryString({ siape })}`),
+    ...STATIC_QUERY,
+  });
+}
+
+export function useRecord(id: string | null) {
+  return useQuery({
+    queryKey: ['record', id],
+    queryFn: () => fetchJson<RecordDetail>(`/api/record/${encodeURIComponent(id!)}`),
+    enabled: Boolean(id),
+    ...STATIC_QUERY,
+  });
+}
+
+export function usePortfolio(siape: string | null) {
+  return useQuery({
+    queryKey: ['portfolio', siape],
+    queryFn: () => fetchJson<PortfolioPayload>(`/api/professor/${encodeURIComponent(siape!)}/portfolio`),
+    enabled: Boolean(siape),
+    ...STATIC_QUERY,
+  });
+}
+
+export function useEntity(id: string | null) {
+  return useQuery({
+    queryKey: ['entity', id],
+    queryFn: () => fetchJson<EntityPayload>(`/api/entity/${encodeURIComponent(id!)}`),
+    enabled: Boolean(id),
+    ...STATIC_QUERY,
+  });
+}
+
+/** The palette's server-side search; a short query returns nothing, cheaply. */
+export function useSearchAll(q: string) {
+  const needle = q.trim();
+  return useQuery({
+    queryKey: ['search', needle],
+    queryFn: () => fetchJson<SearchPayload>(`/api/search${queryString({ q: needle })}`),
+    enabled: needle.length >= 2,
+    placeholderData: (previous) => previous,
+    staleTime: 60_000,
+  });
+}
+
+export function useSources() {
+  return useQuery({
+    queryKey: ['sources'],
+    queryFn: () => fetchJson<SourcesPayload>('/api/sources'),
+    staleTime: 30_000,
+  });
+}

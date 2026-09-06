@@ -593,3 +593,54 @@ svg.graph.panning { cursor: grabbing; }
             padding: 0 14px 11px; }
 .maptools .asks { padding: 2px; }
 .maptools .asks button { padding: 5px 10px; font-size: 12px; }
+
+/* ------------------------------------------------------------ the store */
+
+.famchips { display: flex; flex-wrap: wrap; gap: 5px; }
+.famchips .chip .num, .chips .chip .num { font-family: var(--mono); color: var(--text-faint); margin-left: 2px; }
+.chip.info { background: var(--surface-2); color: var(--text-muted); }
+
+.linkish {
+  background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit;
+  cursor: pointer; text-align: left;
+}
+.linkish:hover { color: var(--accent); text-decoration: underline; }
+
+/* Years x families, one thin column per year. */
+.timeline {
+  display: flex; align-items: flex-end; gap: 2px; height: 78px; padding: 6px 0 16px;
+  margin: 8px 0 2px; border-bottom: 1px solid var(--border); position: relative;
+}
+.tl-col {
+  flex: 1 1 0; min-width: 4px; height: 100%; display: flex; flex-direction: column;
+  justify-content: flex-end; background: none; border: 0; padding: 0; cursor: pointer;
+  position: relative; border-radius: 2px;
+}
+.tl-col:hover { background: var(--surface-2); }
+.tl-col.on { background: var(--accent-soft); }
+.tl-bar { display: flex; flex-direction: column-reverse; width: 100%; border-radius: 2px 2px 0 0; overflow: hidden; min-height: 2px; }
+.tl-seg { display: block; width: 100%; min-height: 2px; background: var(--c1); }
+.tl-year {
+  position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  font: 10px var(--mono); color: var(--text-faint); padding-top: 2px; white-space: nowrap;
+}
+.fam-work { background: var(--c1); }
+.fam-technical { background: var(--c5); }
+.fam-supervision { background: var(--c2); }
+.fam-committee { background: var(--c3); }
+.fam-project { background: var(--c4); }
+.fam-career, .fam-activity { background: var(--c6); }
+.fam-degree, .fam-training { background: var(--c7); }
+.fam-course, .fam-event, .fam-award, .fam-line, .fam-area, .fam-language { background: var(--c8); }
+
+/* A career as a dated list. */
+.career { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.career li {
+  display: grid; grid-template-columns: 92px 1fr; gap: 10px; padding: 6px 8px;
+  border-radius: var(--r); cursor: pointer; border: 1px solid transparent;
+}
+.career li:hover { background: var(--surface-2); border-color: var(--border); }
+.career .span { font: 11.5px var(--mono); color: var(--text-muted); padding-top: 2px; }
+.career .what { display: flex; flex-direction: column; min-width: 0; }
+.career .what b { font-size: 12.5px; font-weight: 600; }
+.career .what .faint { font-size: 11px; }

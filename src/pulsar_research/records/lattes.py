@@ -451,10 +451,18 @@ def _shape_career(rec: Record, obj: dict[str, Any]) -> Record:
     for tie in ties:
         if not isinstance(tie, dict):
             continue
+        # CNPq's coded fields say LIVRE ("other") for 1,877 of 1,898 ties; the
+        # words are in the free-text ones: "Revisor de periódico", "Servidor
+        # público", "Professor Adjunto".
+        kind = _leaf(tie, "tipodevinculo")
+        if kind.upper() in ("LIVRE", "OUTRO", ""):
+            kind = _leaf(tie, "outrovinculoinformado") or kind
+        role = _leaf(tie, "enquadramentofuncional")
+        if role.upper() in ("LIVRE", "OUTRO", ""):
+            role = _leaf(tie, "outroenquadramentofuncionalinformado") or ""
         spans.append({
-            "kind": _leaf(tie, "tipodevinculo"),
-            "role": _leaf(tie, "enquadramentofuncional", "outroenquadramentofuncionalinformado",
-                          "outrovinculoinformado"),
+            "kind": kind,
+            "role": role,
             "from": _year(_leaf(tie, "anoinicio")),
             "to": _year(_leaf(tie, "anofim")),
             "hours": _leaf(tie, "cargahorariasemanal"),
