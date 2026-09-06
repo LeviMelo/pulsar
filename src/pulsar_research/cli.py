@@ -209,8 +209,20 @@ def dashboard(
     port: int = typer.Option(8787, "--port"),
     host: str = typer.Option("127.0.0.1", "--host", help="Loopback only unless you mean it."),
     open_browser: bool = typer.Option(True, "--open/--no-open"),
+    window: bool = typer.Option(
+        False, "--window",
+        help="Draw the console in a native window instead of a browser tab. "
+             "Needs the `desktop` extra.",
+    ),
+    devtools: bool = typer.Option(False, "--devtools", help="Web inspector, with --window."),
 ) -> None:
-    """Launch the local operator console."""
+    """Launch the local operator console.
+
+    The browser is the default because every screen's state lives in the URL,
+    and an address bar is how a view gets copied to someone else. `--window`
+    trades that for a frame of its own; the window's View menu hands the current
+    URL back to the browser when a link is what is wanted.
+    """
     import webbrowser
 
     from .webapp import serve
@@ -223,6 +235,22 @@ def dashboard(
         console.print(f"[red]Cannot bind {host}:{port}[/] — {exc}")
         raise typer.Exit(1)
     url = f"http://{'localhost' if host == '127.0.0.1' else host}:{port}/"
+
+    if window:
+        from .webapp.desktop import DesktopUnavailable, run_window
+
+        console.print(f"[bold]PULSAR console[/] → native window  (also at [cyan]{url}[/])")
+        try:
+            run_window(httpd, url, storage_path=config.paths.cache_dir / "webview",
+                       debug=devtools)
+        except DesktopUnavailable as exc:
+            console.print(f"[red]{exc}[/]")
+            raise typer.Exit(1)
+        finally:
+            httpd.server_close()
+        console.print("stopped")
+        return
+
     console.print(f"[bold]PULSAR console[/] → [cyan]{url}[/]  (ctrl-c to stop)")
     if open_browser:
         webbrowser.open(url)

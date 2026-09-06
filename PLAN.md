@@ -775,6 +775,13 @@ screen keeps its state in the URL, so a view is linkable and survives a reload.
 - **Semantic engine** — benchmarks (with a plain-language note per task), map
   fidelity, topic-quality curves over k, and both provenance identities.
 
+`pulsar dashboard --window` draws the same pages in the OS webview instead of a
+browser tab (`webapp/desktop.py`, optional `desktop` extra). Nothing in the front
+end changes; the server moves to a background thread so the GUI toolkit can own
+the main one. The browser remains the default because URL-as-state is only
+useful while there is an address bar to copy from, and the window's View menu
+hands the current URL back to the browser for exactly that.
+
 The analytical density of the old static `study_landscape.py` is retained; its
 incorrect analytics are not.
 

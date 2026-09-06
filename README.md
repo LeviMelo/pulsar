@@ -166,6 +166,22 @@ npm run build      # rebuild ../static — commit the result
 Run `pulsar dashboard` in another terminal while `npm run dev` is up: the dev
 server proxies the API to it, so both halves are live at once.
 
+### As a window rather than a tab
+
+```powershell
+pip install "pulsar[desktop]"
+pulsar dashboard --window
+```
+
+Same server, same pages, drawn by the operating system's own webview instead of
+a browser tab — WebView2 on Windows, WebKit on macOS. Closing the window stops
+the server.
+
+The browser stays the default for one reason: every screen's state lives in the
+URL, and an address bar is how a view gets copied to someone else. The window's
+**View → Open this view in a browser** hands the current URL back when a link is
+what you want.
+
 ## Tests
 
 ```powershell

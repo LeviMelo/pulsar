@@ -31,6 +31,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+# `pulsar dashboard --window` only. The console itself is a browser page served
+# by the standard library, so nothing here is needed to run it.
+desktop = ["pywebview>=5.4"]
 
 [project.scripts]
 pulsar = "pulsar_research.cli:app"
