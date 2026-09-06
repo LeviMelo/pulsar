@@ -132,7 +132,7 @@ def test_a_fresh_stage_below_a_stale_one_is_reported_as_blocked(db):
     from pulsar_research.semantics.corpus import load_corpus
     corpus = load_corpus(db)
     projection = g.build(db, corpus)
-    g.record_build(db, corpus.fingerprint(),
+    g.record_build(db, reg._graph_inputs(db, corpus),
                    g.write_graph(db, projection.entities.values(), projection.edges))
 
     assert reg.BY_NAME["graph.project"].status(db).state == "ok"

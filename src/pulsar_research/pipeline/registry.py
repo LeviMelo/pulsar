@@ -134,7 +134,16 @@ def _space_fresh(db: Database) -> Freshness:
 
 
 def _graph_fresh(db: Database) -> Freshness:
-    return _fingerprint_probe(db, "graph_builds", "corpus_fingerprint", "the entity graph")(db)
+    if not db.table_exists("graph_builds"):
+        return Freshness("never", "the entity graph has never been built")
+    rows = db.query_df("SELECT corpus_fingerprint AS fp, created_at FROM graph_builds "
+                       "ORDER BY created_at DESC LIMIT 1")
+    if not len(rows):
+        return Freshness("never", "the entity graph has never been built")
+    at = str(rows.iloc[0]["created_at"])
+    if str(rows.iloc[0]["fp"] or "") != _graph_inputs(db):
+        return Freshness("stale", "the corpus or the records changed since this was built", at)
+    return Freshness("ok", f"built {at[:16]} against the current corpus and records", at)
 
 
 def _run_fresh(db: Database) -> Freshness:
@@ -253,8 +262,17 @@ def _build_graph(config: AppConfig, db: Database) -> Any:
     # How much of the graph's identity was concluded rather than read. A build
     # that starts inferring hundreds of merges is a build to look at.
     stats["inferred_identities"] = len(projection.inferred_identities)
-    g.record_build(db, corpus.fingerprint(), stats)
+    g.record_build(db, _graph_inputs(db, corpus), stats)
     return stats
+
+
+def _graph_inputs(db: Database, corpus=None) -> str:
+    """What the projection read: the corpus, and the records build it drew on."""
+    from ..records.store import last_build
+    from ..semantics.corpus import load_corpus
+    corpus = corpus or load_corpus(db)
+    build = last_build(db)
+    return corpus.fingerprint() + "+" + str((build or {}).get("fingerprint") or "")
 
 
 def _build_graph_metrics(config: AppConfig, db: Database) -> Any:
@@ -343,7 +361,7 @@ STAGES: tuple[Stage, ...] = (
         why="Projects every acquired fact into one id space and one relation "
             "vocabulary. This is what the platform reasons over.",
         produces=("graph_entities", "graph_edges"),
-        depends_on=("intelligence.metrics", "semantics.space"),
+        depends_on=("records.extract", "intelligence.metrics", "semantics.space"),
         run=_build_graph,
         freshness=_graph_fresh,
     ),

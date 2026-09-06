@@ -89,12 +89,15 @@ def write_graph(
         con.execute("DELETE FROM graph_entities")
         con.execute("DELETE FROM graph_edges")
         # An empty projection is a legitimate result — a store with nothing
-        # acquired yet, or a graph deliberately emptied — and DuckDB rejects
-        # `executemany` with no parameter sets, so it must not be reached.
-        if entity_rows:
-            con.executemany("INSERT INTO graph_entities VALUES (?,?,?,?,?,?,?,?)", entity_rows)
-        if edge_rows:
-            con.executemany("INSERT INTO graph_edges VALUES (?,?,?,?,?,?,?,?,?,?)", edge_rows)
+        # acquired yet, or a graph deliberately emptied — and must not reach
+        # the writer. Bulk appends through a registered frame: row-at-a-time
+        # `executemany` took two minutes over a hundred thousand edges.
+        _bulk(con, "graph_entities", entity_rows, [
+            "entity_id", "kind", "key", "name", "normalized_name", "payload_json",
+            "sources_json", "computed_at"])
+        _bulk(con, "graph_edges", edge_rows, [
+            "edge_id", "source_id", "target_id", "relation", "weight", "directed", "year",
+            "source", "evidence_json", "computed_at"])
         con.execute("CHECKPOINT")
 
     return {
@@ -124,9 +127,21 @@ def write_metrics(db: Database, rows: Iterable[tuple[str, str, float, Mapping[st
                for entity_id, metric, value, extra in rows]
     with db.connect() as con:
         con.execute("DELETE FROM entity_metrics")
-        if payload:
-            con.executemany("INSERT INTO entity_metrics VALUES (?,?,?,?,?)", payload)
+        _bulk(con, "entity_metrics", payload,
+              ["entity_id", "metric", "value", "payload_json", "computed_at"])
     return len(payload)
+
+
+def _bulk(con, table: str, rows: list[list[Any]], columns: list[str]) -> None:
+    if not rows:
+        return
+    import pandas as pd
+    frame = pd.DataFrame(rows, columns=columns)
+    if "year" in columns:
+        frame["year"] = frame["year"].astype("Int64")
+    con.register("bulk_frame", frame)
+    con.execute(f'INSERT INTO "{table}" SELECT * FROM bulk_frame')
+    con.unregister("bulk_frame")
 
 
 def _tally(values: Iterable[str]) -> dict[str, int]:

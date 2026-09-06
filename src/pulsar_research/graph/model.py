@@ -50,6 +50,7 @@ class Kind(str, Enum):
     POSITION = "position"   #: an offered supervision slot — a work plan
     TOPIC = "topic"         #: a factor of the semantic space
     SKILL = "skill"         #: an extracted technique
+    VENUE = "venue"         #: a journal, conference series or publisher a work appeared in
 
 
 class Relation(str, Enum):
@@ -71,10 +72,18 @@ class Relation(str, Enum):
     COLLABORATES_WITH = "collaborates_with"  #: person ↔ person (symmetric)
     ABOUT = "about"                          #: anything → topic
     USES = "uses"                            #: anything → skill
+    # -- from records: the career, the lineage and the social record ---------
+    WORKED_AT = "worked_at"                  #: person → org (an appointment)
+    TRAINED_AT = "trained_at"                #: person → org (a degree)
+    ADVISED_BY = "advised_by"                #: person → person (their advisor)
+    SUPERVISES = "supervises"                #: person → person (a student, by name)
+    EXAMINED = "examined"                    #: person → person (sat on the candidate's board)
+    SERVED_WITH = "served_with"              #: person ↔ person (shared a board; symmetric)
+    PUBLISHED_IN = "published_in"            #: work → venue
 
 
 #: Relations whose direction carries no information.
-SYMMETRIC = frozenset({Relation.COLLABORATES_WITH})
+SYMMETRIC = frozenset({Relation.COLLABORATES_WITH, Relation.SERVED_WITH})
 
 #: What each relation is allowed to join, so a projection bug is a loud failure
 #: rather than an edge that merely looks odd on a drawing three screens later.
@@ -89,6 +98,13 @@ ENDPOINTS: dict[Relation, tuple[frozenset[Kind], frozenset[Kind]]] = {
     Relation.COLLABORATES_WITH: (frozenset({Kind.PERSON}), frozenset({Kind.PERSON})),
     Relation.ABOUT: (frozenset(Kind), frozenset({Kind.TOPIC})),
     Relation.USES: (frozenset(Kind), frozenset({Kind.SKILL})),
+    Relation.WORKED_AT: (frozenset({Kind.PERSON}), frozenset({Kind.ORG})),
+    Relation.TRAINED_AT: (frozenset({Kind.PERSON}), frozenset({Kind.ORG})),
+    Relation.ADVISED_BY: (frozenset({Kind.PERSON}), frozenset({Kind.PERSON})),
+    Relation.SUPERVISES: (frozenset({Kind.PERSON}), frozenset({Kind.PERSON})),
+    Relation.EXAMINED: (frozenset({Kind.PERSON}), frozenset({Kind.PERSON})),
+    Relation.SERVED_WITH: (frozenset({Kind.PERSON}), frozenset({Kind.PERSON})),
+    Relation.PUBLISHED_IN: (frozenset({Kind.WORK}), frozenset({Kind.VENUE})),
 }
 
 

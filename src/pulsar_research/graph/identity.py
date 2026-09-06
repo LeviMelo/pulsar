@@ -24,7 +24,7 @@ different name-folding rules.
 from __future__ import annotations
 
 import unicodedata
-from typing import Sequence
+from typing import Iterable, Sequence
 
 from ..db import Database
 from ..semantics.normalize import display_person_name, normalize_person_name
@@ -159,7 +159,7 @@ class PersonResolver:
 
     def resolve(self, name: str) -> str:
         """The SIAPE this name belongs to, or an empty string."""
-        normalized = normalize_person_name(name)
+        normalized = normalize_person_name(given_first(name))
         if not normalized:
             return ""
         exact = self._exact.get(normalized)
@@ -168,8 +168,16 @@ class PersonResolver:
         tokens = normalized.split()
         if len(tokens) < 2:
             return ""
-        candidates = [(siape, full) for siape, full in self._by_ends.get((tokens[0], tokens[-1]), [])
-                      if _ordered_subset(tokens, full)]
+        first, last = tokens[0], tokens[-1]
+        # A first name written as an initial is looked up by that initial: the
+        # index is keyed on full first names, so every professor with that
+        # initial and surname is a candidate, and uniqueness still decides.
+        if len(first) == 1:
+            pools = [v for (f, l), v in self._by_ends.items() if l == last and f[0] == first]
+            candidates = [c for pool in pools for c in pool if _ordered_subset(tokens, c[1])]
+        else:
+            candidates = [(siape, full) for siape, full in self._by_ends.get((first, last), [])
+                          if _ordered_subset(tokens, full)]
         if len(candidates) != 1:
             return ""
         siape = candidates[0][0]
@@ -181,7 +189,98 @@ def _ordered_subset(short: Sequence[str], full: Sequence[str]) -> bool:
     """Does every token of `short` appear in `full`, in the same order?
 
     Order matters: "Silva Ana" is not evidence for "Ana … Silva". Dropped middle
-    names are ordinary in Brazilian academic naming; reordered ones are not.
+    names are ordinary in Brazilian academic naming; reordered ones are not. A
+    single-letter token is an initial and matches any full token it begins.
     """
     remaining = iter(full)
-    return all(any(token == candidate for candidate in remaining) for token in short)
+    return all(any(_token_matches(token, candidate) for candidate in remaining) for token in short)
+
+
+def _token_matches(short: str, full: str) -> bool:
+    return short == full or (len(short) == 1 and full.startswith(short))
+
+
+# ---------------------------------------------------------------------------
+# Strangers: people we hold only a name for
+# ---------------------------------------------------------------------------
+
+_PARTICLES = frozenset({"de", "da", "do", "das", "dos", "e", "di", "del", "van", "von", "y", "la", "le"})
+
+
+def given_first(name: str) -> str:
+    """`"LADLE, Richard J."` → `"Richard J. Ladle"`; anything else unchanged.
+
+    CNPq stores a citation name next to the full one and people paste either
+    into a team list, so the same co-author arrives both ways. Reordering the
+    comma form is safe: a comma in a personal name means exactly this.
+    """
+    text = " ".join(str(name or "").split())
+    if text.count(",") != 1:
+        return text
+    surname, given = (part.strip() for part in text.split(","))
+    if not surname or not given:
+        return text
+    return f"{given} {surname}"
+
+
+def _tokens(name: str) -> list[str]:
+    return [t for t in normalize_person_name(given_first(name)).split() if t.lower() not in _PARTICLES]
+
+
+def name_key(name: str) -> tuple[str, str]:
+    """`(first initial, last surname)` — the coarsest key two spellings of one
+    person will share, and the bucket `merge_names` refines within."""
+    tokens = _tokens(name)
+    if not tokens:
+        return ("", "")
+    if len(tokens) == 1:
+        return (tokens[0][0], tokens[0])
+    return (tokens[0][0], tokens[-1])
+
+
+def _compatible(a: Sequence[str], b: Sequence[str]) -> bool:
+    """Two token lists that could be the same person: same surname, first
+    names equal or one an initial of the other, and the shorter one's tokens
+    appearing in order (as tokens or initials) in the longer."""
+    if not a or not b or a[-1] != b[-1]:
+        return False
+    if not (_token_matches(a[0], b[0]) or _token_matches(b[0], a[0])):
+        return False
+    short, long = (a, b) if len(a) <= len(b) else (b, a)
+    return _ordered_subset(short, long)
+
+
+def merge_names(names: Iterable[str]) -> dict[str, str]:
+    """``spelling -> representative spelling`` for names that are one person.
+
+    "Richard James Ladle", "Richard J Ladle", "LADLE, R. J." and "R. Ladle"
+    are one co-author on one professor's CV. Nothing here can prove that, and
+    the merge is deliberately confined to spellings that share a surname and a
+    compatible first name — which is why "Ricardo Ladle" stays apart — but a
+    social record that lists one collaborator four times is not a record, it is
+    a spelling inventory. The representative is the longest spelling, because it
+    carries the most of the name.
+    """
+    buckets: dict[tuple[str, str], list[str]] = {}
+    for name in names:
+        key = name_key(name)
+        if key[1]:
+            buckets.setdefault(key, []).append(name)
+
+    out: dict[str, str] = {}
+    for spellings in buckets.values():
+        tokens = {sp: _tokens(sp) for sp in spellings}
+        groups: list[list[str]] = []
+        for spelling in sorted(set(spellings), key=lambda sp: (-len(tokens[sp]), -len(sp))):
+            for group in groups:
+                if all(_compatible(tokens[spelling], tokens[member]) for member in group):
+                    group.append(spelling)
+                    break
+            else:
+                groups.append([spelling])
+        for group in groups:
+            representative = given_first(max(
+                group, key=lambda sp: (len(tokens[sp]), len(given_first(sp)))))
+            for spelling in group:
+                out[spelling] = representative
+    return out

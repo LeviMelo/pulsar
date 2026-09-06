@@ -32,7 +32,7 @@ from typing import Any, Iterable
 
 from ..db import Database
 
-MODES = ("collaboration", "skills", "topics")
+MODES = ("collaboration", "committees", "skills", "topics")
 
 #: Similarity below this is noise: two portfolios sharing one common technique.
 MIN_SIMILARITY = 0.18
@@ -99,7 +99,7 @@ def _cosine(a: dict[str, float], b: dict[str, float]) -> float:
     return 0.0 if na == 0 or nb == 0 else dot / (na * nb)
 
 
-def _graph_adjacency(db: Database) -> dict[str, dict[str, float]]:
+def _graph_adjacency(db: Database, relation: str = "collaborates_with") -> dict[str, dict[str, float]]:
     """Co-authorship out of the entity graph, or nothing if it has not been built.
 
     Read from the graph rather than from `collaboration_edges` because identity
@@ -114,7 +114,29 @@ def _graph_adjacency(db: Database) -> dict[str, dict[str, float]]:
         return {}
     from ..graph import adjacency
     from ..graph.model import Relation
-    return adjacency(db, relations=[Relation.COLLABORATES_WITH])
+    return adjacency(db, relations=[Relation(relation)])
+
+
+def _committee_edges(db: Database, known: set[str]) -> list[dict[str, Any]]:
+    """Two indexed professors who sat on the same examination board.
+
+    Boards are where a faculty's working relationships show without a paper
+    having to come of them: a supervisor invites the colleagues whose judgement
+    they want. Sparse like co-authorship, and usually a different set of pairs.
+    """
+    graph = _graph_adjacency(db, "served_with")
+    seen: dict[tuple[str, str], float] = {}
+    for node, neighbours in graph.items():
+        a = _siape(node)
+        if a not in known:
+            continue
+        for other, weight in neighbours.items():
+            b = _siape(other)
+            if b not in known or a == b:
+                continue
+            seen[(a, b) if a < b else (b, a)] = float(weight)
+    return [{"source": a, "target": b, "weight": weight, "why": [], "shared": int(weight)}
+            for (a, b), weight in seen.items()]
 
 
 def _collaboration_edges(db: Database, known: set[str]) -> list[dict[str, Any]]:
@@ -290,9 +312,16 @@ def build(db: Database, mode: str, *, display_name=None) -> dict[str, Any]:
     if mode == "collaboration":
         edges = _collaboration_edges(db, known)
         because = lambda e: f"{e['shared']} shared record{'' if e['shared'] == 1 else 's'}"
-        note = ("Lattes co-participation between two indexed supervisors. Sparse and factual: "
-                "an edge means these two have actually appeared on the same project or paper. "
-                "Co-authors outside this faculty are counted on the node, not drawn.")
+        note = ("Two indexed supervisors on the same paper or project team, from the extracted "
+                "records. Sparse and factual: an edge means these two have actually worked "
+                "together. Co-authors outside this faculty are counted on the node, not drawn.")
+    elif mode == "committees":
+        edges = _committee_edges(db, known)
+        because = lambda e: f"{e['shared']} shared board{'' if e['shared'] == 1 else 's'}"
+        note = ("Two supervisors who sat on the same examination board — a thesis, a "
+                "dissertation, a qualifying exam, a hiring panel. Boards are invitations: "
+                "this is who asks whom for their judgement, whether or not a paper ever "
+                "came of it. Read from the extracted records.")
     elif mode == "skills":
         skills = db.query_df(
             "SELECT entity_id, skill_id, label FROM entity_skills "
@@ -355,6 +384,7 @@ def build(db: Database, mode: str, *, display_name=None) -> dict[str, Any]:
 
 _LABELS = {
     "collaboration": "Co-authorship",
+    "committees": "Shared boards",
     "skills": "Shared techniques",
     "topics": "Shared subjects",
 }

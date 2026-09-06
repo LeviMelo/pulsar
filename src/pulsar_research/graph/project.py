@@ -34,7 +34,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from ..db import Database
 from ..semantics.corpus import Atom, SemanticCorpus
 from ..semantics.normalize import clean_text, display_person_name, normalize_person_name
-from .identity import Names, PersonResolver
+from .identity import Names, PersonResolver, given_first, merge_names
 from .model import Edge, Entity, Kind, Relation, eid, person_id, slug
 
 #: Atom kinds that describe a discrete scholarly output.
@@ -180,12 +180,9 @@ def _positions(p: Projection, opportunities: Sequence[Mapping[str, Any]]) -> Non
 
 
 def _atoms(p: Projection, atoms: Iterable[Atom]) -> None:
-    """Works and projects from the atom corpus.
-
-    The corpus already did the hard part — turning scraped Lattes and public
-    SIGAA tables into typed, dated, attributable records — so this is a mapping
-    from atom kind to entity kind and relation, and nothing more.
-    """
+    """Works and projects from the atom corpus — the fallback for a store that
+    holds an archive but has not run `records build`. Records carry the same
+    facts with people, venues and dates attached, so when they exist they win."""
     for atom in atoms:
         if atom.kind in ATTRIBUTE_KINDS or atom.kind == "opportunity":
             continue
@@ -217,24 +214,215 @@ def _atoms(p: Projection, atoms: Iterable[Atom]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Records: works, projects, the career, the lineage and the social record
+# ---------------------------------------------------------------------------
+
+#: Record families that become a WORK entity.
+_WORK_FAMILIES = frozenset({"work", "technical"})
+
+
+class _People:
+    """Names → person ids, resolving faculty and merging strangers' spellings.
+
+    Every name on a record goes through the faculty resolver first; a name that
+    is nobody indexed becomes a `person:name-…` node under the representative
+    spelling `merge_names` chose for it, so "Richard J Ladle" and "LADLE, R. J."
+    are one stranger rather than two.
+    """
+
+    def __init__(self, p: Projection, db: Database, spellings: Iterable[str]):
+        self._p = p
+        self._resolver = PersonResolver(db)
+        self._merged = merge_names(spellings)
+
+    def id_for(self, name: str, *, source: str) -> str | None:
+        name = clean_text(name)
+        if not name:
+            return None
+        siape = self._resolver.resolve(name)
+        if siape:
+            return person_id(siape=siape)
+        representative = self._merged.get(name, given_first(name))
+        try:
+            entity_id = person_id(name=representative)
+        except ValueError:
+            return None
+        self._p.add(Entity(entity_id, Kind.PERSON, display_person_name(representative) or representative,
+                           payload={"indexed": False}, sources=(source,)))
+        return entity_id
+
+    @property
+    def inferred(self) -> dict[str, str]:
+        return self._resolver.inferred
+
+
+def _org(p: Projection, name: str, code: str = "", *, source: str) -> str | None:
+    name = clean_text(name)
+    if not name or not slug(name):
+        return None
+    entity_id = p.add(Entity(eid(Kind.ORG, name), Kind.ORG, name,
+                             payload={"level": "institution", "code": clean_text(code)},
+                             sources=(source,)))
+    return entity_id
+
+
+def _records(p: Projection, db: Database) -> bool:
+    """Project the records table. Returns False if there is none to project."""
+    if not db.table_exists("records") or not int(db.scalar("SELECT COUNT(*) FROM records", default=0) or 0):
+        return False
+    from ..records import store as records
+
+    rows = db.query_df(
+        "SELECT record_id, siape, family, form, title, year, year_end, status, org, org_code, "
+        "counterpart, venue, nature, people_json, source FROM records "
+        "WHERE family IN ('work', 'technical', 'project', 'career', 'degree', 'committee', 'supervision')")
+    spellings = [str(r.name) for r in db.query_df(
+        "SELECT DISTINCT name FROM record_people").itertuples()]
+    people = _People(p, db, spellings)
+    from ..db import json_load
+
+    # Boards are the one place several people are named together for a reason
+    # other than authorship; the tie is between every pair of members.
+    served: dict[tuple[str, str], list[int | None]] = {}
+    coauthored: dict[tuple[str, str], list[int | None]] = {}
+
+    for row in rows.itertuples():
+        family = str(row.family)
+        siape = str(row.siape)
+        subject = person_id(siape=siape)
+        if subject not in p.entities:
+            continue
+        source = str(row.source or "records")
+        year = _int(row.year)
+        year_end = _int(row.year_end)
+        named = json_load(row.people_json, []) or []
+
+        if family in _WORK_FAMILIES:
+            work = p.add(Entity(
+                eid(Kind.WORK, row.record_id), Kind.WORK, clean_text(row.title),
+                payload={"form": str(row.form), "year": year, "family": family,
+                         "venue": clean_text(row.venue), "record_id": str(row.record_id)},
+                sources=(source,)))
+            p.link(subject, work, Relation.AUTHORED, year=year, source=source)
+            authors = [subject]
+            for person in named:
+                if person.get("role") not in ("author", "team", "responsible"):
+                    continue
+                other = people.id_for(person.get("name", ""), source=source)
+                if other and other != subject:
+                    p.link(other, work, Relation.AUTHORED, year=year, source=source)
+                    authors.append(other)
+            for other in authors[1:]:
+                coauthored.setdefault(_pair(subject, other), []).append(year)
+            venue = clean_text(row.venue)
+            if venue and family == "work" and slug(venue):
+                venue_id = p.add(Entity(eid(Kind.VENUE, venue), Kind.VENUE, venue,
+                                        payload={"form": str(row.form)}, sources=(source,)))
+                p.link(work, venue_id, Relation.PUBLISHED_IN, year=year, source=source)
+
+        elif family == "project":
+            project = p.add(Entity(
+                eid(Kind.PROJECT, row.record_id), Kind.PROJECT, clean_text(row.title),
+                payload={"origin": f"record:{row.form}", "year": year, "year_end": year_end,
+                         "active": str(row.status) in ("ongoing", "active"),
+                         "record_id": str(row.record_id)},
+                sources=(source,)))
+            p.link(subject, project, Relation.LEADS, year=year, source=source)
+            org = _org(p, str(row.org or ""), str(row.org_code or ""), source=source)
+            if org:
+                p.link(project, org, Relation.PART_OF, source=source)
+            for person in named:
+                other = people.id_for(person.get("name", ""), source=source)
+                if other and other != subject:
+                    coauthored.setdefault(_pair(subject, other), []).append(year)
+
+        elif family == "career":
+            org = _org(p, str(row.org or ""), str(row.org_code or ""), source=source)
+            if org:
+                p.link(subject, org, Relation.WORKED_AT, year=year, source=source,
+                       evidence={"role": clean_text(row.nature), "form": str(row.form),
+                                 "year_end": year_end, "status": str(row.status)})
+
+        elif family == "degree":
+            org = _org(p, str(row.org or ""), str(row.org_code or ""), source=source)
+            if org:
+                p.link(subject, org, Relation.TRAINED_AT, year=year_end or year, source=source,
+                       evidence={"level": str(row.form), "title": clean_text(row.title),
+                                 "year_start": year})
+            advisor = people.id_for(str(row.counterpart or ""), source=source)
+            if advisor and advisor != subject:
+                p.link(subject, advisor, Relation.ADVISED_BY, year=year_end or year, source=source,
+                       evidence={"level": str(row.form)})
+
+        elif family == "supervision":
+            student = people.id_for(str(row.counterpart or ""), source=source)
+            if student and student != subject:
+                p.link(subject, student, Relation.SUPERVISES, year=year, source=source,
+                       evidence={"level": str(row.form), "status": str(row.status),
+                                 "title": clean_text(row.title)})
+
+        elif family == "committee":
+            candidate = people.id_for(str(row.counterpart or ""), source=source)
+            if candidate and candidate != subject:
+                p.link(subject, candidate, Relation.EXAMINED, year=year, source=source,
+                       evidence={"level": str(row.form), "title": clean_text(row.title)})
+            members = [subject]
+            for person in named:
+                if person.get("role") != "member":
+                    continue
+                other = people.id_for(person.get("name", ""), source=source)
+                if other and other not in members:
+                    members.append(other)
+            for i, left in enumerate(members):
+                for right in members[i + 1:]:
+                    served.setdefault(_pair(left, right), []).append(year)
+
+    for (left, right), years in served.items():
+        known = [y for y in years if y]
+        p.link(left, right, Relation.SERVED_WITH, weight=float(len(years)),
+               year=max(known) if known else None, source="records",
+               evidence={"boards": len(years), "first": min(known) if known else None})
+    for (left, right), years in coauthored.items():
+        known = [y for y in years if y]
+        p.link(left, right, Relation.COLLABORATES_WITH, weight=float(len(years)),
+               year=max(known) if known else None, source="records",
+               evidence={"shared": len(years), "first": min(known) if known else None})
+    p.inferred_identities.update(people.inferred)
+    return True
+
+
+def _int(value: Any) -> int | None:
+    """A year out of a frame cell, which may be None, NaN or pandas' NA."""
+    try:
+        import pandas as pd
+        if value is None or pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _pair(a: str, b: str) -> tuple[str, str]:
+    return (a, b) if a <= b else (b, a)
+
+
+# ---------------------------------------------------------------------------
 # Collaboration
 # ---------------------------------------------------------------------------
 
 
 def _collaboration(p: Projection, db: Database) -> None:
-    """Co-authorship, from Lattes project teams.
+    """Co-authorship from the older `collaboration_edges` table.
 
-    An edge to someone outside the indexed faculty is kept rather than dropped.
-    The reach of a research group past its own walls is exactly the thing a
-    faculty-only graph cannot show, and it is the difference between "this
-    professor is central here" and "this professor is a door out of here".
+    Only used when there are no records: the records projection derives the
+    same tie from papers *and* project teams, with years, and merges the
+    spellings this table keeps apart.
     """
     if not db.table_exists("collaboration_edges"):
         return
-    # Resolution is asked for again rather than trusted from the acquired row:
-    # an alias learned after that table was written would otherwise leave two
-    # nodes where the faculty has one, and the graph would under-report its own
-    # internal density.
     resolver = PersonResolver(db)
     rows = db.query_df(
         "SELECT source_siape, target_siape, collaborator_name, weight FROM collaboration_edges")
@@ -340,8 +528,12 @@ def build(db: Database, corpus: SemanticCorpus, *, space_id: str | None = None) 
     p = Projection()
     _people(p, corpus.professors, Names(db))
     _positions(p, corpus.opportunities)
-    _atoms(p, corpus.atoms)
-    _collaboration(p, db)
+    # Records carry the same works and projects as the atoms, with the people,
+    # venues and dates attached; the atom path is what a store gets before it
+    # has run `records build`.
+    if not _records(p, db):
+        _atoms(p, corpus.atoms)
+        _collaboration(p, db)
     _topics_and_skills(p, db, space_id)
 
     # A collaboration edge can name a SIAPE that acquisition has since dropped;
