@@ -74,7 +74,7 @@ pulsar sync all                     # acquire everything, then rebuild semantics
 pulsar semantics build              # fit the semantic space + benchmark + score
 pulsar semantics profile            # re-score after editing config/profile.yaml
 pulsar semantics status             # active space/run, benchmarks, map fidelity, topics
-pulsar dashboard                    # the operator console
+pulsar dashboard                    # the operator console, at localhost:8787
 ```
 
 Ad-hoc retrieval, on the fitted space (a query never refits anything):
@@ -146,6 +146,25 @@ data/exports/                   campaign exports and previews
 `data/` is git-ignored in full. The raw archives under `data/public_sigaa/` are
 expensive acquired provenance, not build output — back them up, never delete them
 to reclaim space. Everything under `data/cache/` is regenerable.
+
+## The console
+
+`pulsar dashboard` serves a React single-page app from `http.server` on
+localhost:8787. The source is a Vite project at
+`src/pulsar_research/webapp/frontend/`; its build output is
+`src/pulsar_research/webapp/static/`, which is what the server hands to the
+browser and what the wheel ships. That output is committed, so running the
+console needs Python only — Node is needed only to change the front end.
+
+```powershell
+cd src/pulsar_research/webapp/frontend
+npm install
+npm run dev        # localhost:5173, hot reload, /api proxied to the console
+npm run build      # rebuild ../static — commit the result
+```
+
+Run `pulsar dashboard` in another terminal while `npm run dev` is up: the dev
+server proxies the API to it, so both halves are live at once.
 
 ## Tests
 

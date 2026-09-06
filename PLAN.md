@@ -188,7 +188,7 @@ src/pulsar_research/
     render.py                  Jinja2 → plaintext + HTML theme
     mailer.py                  the only module that can send email
   dashboard/
-    queries.py                 all dashboard SQL (reusable outside Streamlit)
+    queries.py                 all console SQL (reusable from a notebook too)
     app.py                     the operator console
   templates/                   subject/body Jinja2 + the HTML email theme
 tests/                         corpus, representations, skills, provenance, SIGAA contract
@@ -658,7 +658,7 @@ evidence belong to a **run**. Editing `profile.yaml` creates a new run and leave
 the space untouched; refreshing the professor corpus creates a new space.
 
 **Staleness.** `check_staleness()` compares the live corpus fingerprint against the
-stored one. `pulsar doctor` and the dashboard header show it, and campaign
+stored one. `pulsar doctor` and the console header show it, and campaign
 creation *refuses* on a stale space unless `--allow-stale` is passed. PULSAR must
 never silently combine fresh entities with stale semantic scores.
 
@@ -689,7 +689,7 @@ run/entity/facet/channel/score/percentile), `entity_geometry`, `semantic_topics`
    against the declared DDL and drop any that diverge, because
    `CREATE TABLE IF NOT EXISTS` silently leaves a table created by an older
    engine with different columns, and the failure then surfaces much later as a
-   binder error inside a dashboard query;
+   binder error inside a console query;
 3. rebuild `professor_metrics` and widen the outreach tables in place.
 
 Acquired and outreach tables are never dropped — only derived ones, which are
@@ -716,27 +716,124 @@ embedding service health in one table.
 
 ---
 
-## 15. Dashboard
+## 15. Console
 
-Streamlit, six pages, backed by `dashboard/queries.py` (all SQL lives there, so
-the same layer works from a notebook or a future frontend).
+A React single-page application served from the standard library.
+`webapp/server.py` is `http.server` and answers JSON out of
+`dashboard/queries.py`, where all the SQL still lives; `webapp/frontend/` is a
+Vite + React + TypeScript project whose build output *is* `webapp/static/`, so
+the server needs no knowledge that a build step exists — it finds an
+`index.html` and a hashed asset bundle exactly where it used to find
+hand-written modules. `npm run dev` serves the app with hot reload on port 5173
+and proxies `/api` to the console, so the two halves are developed
+independently. `npm run build` is what the wheel ships.
 
-- **Overview** — KPIs → research landscape → strategic opportunity matrix →
-  methodology landscape → concentration (Lorenz/Gini) → priority table.
-- **Opportunities** — filters including *requires skill*, ranked table, and an
-  inspector with a per-channel ranking breakdown, topics and extracted skills.
+The front end is layered rather than screen-by-screen, because the recurring
+failure of the version before it was that a good pattern built inside one screen
+never reached the other six:
+
+- `api/` — payload types and the React Query hooks. A view asks for
+  `useProfessor(siape)`, never for a URL, so a payload that moves cannot leave a
+  stale path buried three files deep.
+- `components/` — the shared vocabulary: table, meter, chip, tabs, the four SVG
+  charts, and the three **records** (a supervisor, a work plan, a message). A
+  supervisor is the same record whether reached from a ranking, the map, or a
+  co-authorship edge.
+- `components/Rail.tsx` — the stack that opens a record *over* the screen you
+  are on. Clicking something must not route you somewhere else and discard the
+  filters, the scroll position, the map's camera and the layout the graph spent
+  three seconds converging into. The few links that genuinely do leave are drawn
+  differently and say so.
+- `views/` — one screen each, plus `views/network/` for the simulation.
+
+It replaced a Streamlit app. Streamlit was the heaviest entry in the dependency
+tree, it was not actually installed in the environment that ships the tool, and
+its execution model — re-run the whole script on every widget change — is the
+wrong shape for an interface whose job is to filter 187 rows and read one of
+them. Choosing a work plan from a dropdown in order to "inspect" it is a
+workaround for a framework, not a design. The corpus is small enough that the
+browser holds all of it, which is what makes filtering feel immediate, and every
+screen keeps its state in the URL, so a view is linkable and survives a reload.
+
+- **Overview** — the two live questions only: which conversations are still
+  open, and which funded plan nobody has written to deserves the next move.
+  Everything else it used to show is the Landscape screen's job.
+- **Work plans** — filters including *requires skill*, ranked table, and a
+  side-by-side record with a per-channel ranking breakdown, topics and skills.
 - **Professors** — ranked by *current supervision capacity* or *research
   trajectory*, with an evidence panel showing each atom's kind, year, match,
   specificity and recency.
-- **Landscape** — topic hierarchy with terms, field composition, the map with its
-  stress and rank correlations stated inline, and the skill supply table.
-- **Semantic Engine** — benchmarks (with a plain-language note per task), map
+- **Landscape** — the map, coloured by whichever question is being asked (field,
+  fit, funding, campaign reach), with its stress and rank correlations stated
+  inline, and a rail whose field and technique bars double as the filters that
+  isolate them.
+- **Network** — the faculty as a graph, over three switchable edge semantics
+  (co-authorship, shared technique, shared subject) that disagree in useful ways.
+  Detail in §15.1.
+- **Outreach** — audiences, per-recipient drafts, and the state of every
+  conversation. It never sends: that stays at a terminal, behind `--confirm`.
+- **Semantic engine** — benchmarks (with a plain-language note per task), map
   fidelity, topic-quality curves over k, and both provenance identities.
-- **Campaigns** — audience builder → freeze → per-recipient review with rendered
-  HTML → select/deselect → explicit send.
 
 The analytical density of the old static `study_landscape.py` is retained; its
 incorrect analytics are not.
+
+### 15.1 The network view
+
+Every other screen ranks, and ranking answers *who*. It cannot answer *shape*:
+whether a strong match sits alone or inside a group three of whose members have
+already been written to; whether a technique lives in one unit or crosses both;
+who is adjacent to a thread that has gone quiet. Those decide a second wave.
+
+- **The page opens on an answer, not on a picture.** Four findings sit above
+  the graph — reachable through a live thread, funded and unwritten, spanning
+  both units, unconnected here — and each one is also the filter that shows who
+  it counted, listed in the rail beside it. A number nobody can act on is
+  decoration.
+- **The controls ask questions, not encodings.** Four tabs — where I've
+  reached, who works like me, who studies like me, who works together — each
+  setting the graph, colour, size and edge meaning together, because those are
+  not four independent choices. The raw encodings stay behind a Display
+  disclosure for anyone who wants to take them apart.
+- **Edges justify themselves.** Thickness carries tie strength; colour is held
+  back for the one thing position cannot show, which ties bridge from someone
+  written to toward someone not. And every tie names the terms it was computed
+  from, so a line between two people can be read rather than trusted — the same
+  rule the rankings follow.
+- **Units are territory.** Full-height bands, width proportional to headcount,
+  with a soft one-sided containment force: the layout leans into the partition
+  instead of being clamped inside it, so a supervisor whose collaborators are
+  nearly all on the other side visibly drifts toward the seam. Each unit can be
+  toggled off, and the rest take its share of the frame. Boxes were tried first
+  and were wrong twice over — a gutter turned every cross-unit tie into a long
+  diagonal, and hard walls left a ridge of nodes pressed flat against them.
+- **The layout is live.** Velocity Verlet with a decaying activity level, not a
+  batch algorithm that computes once and freezes. Any interaction puts energy
+  back in and it re-converges from where it now is: dragging a node drags its
+  neighbourhood elastically, and the spread / edge-length / grouping sliders
+  reorganise the drawing while they are still being moved. A dragged node stays
+  pinned until double-clicked or released with *Unpin*.
+- **Going deeper is not going elsewhere.** The rail is a stack: a supervisor's
+  record, the plan they are offering, the message already sent to them — each
+  opens over the graph with one way back, and the graph never moves. Routing to
+  another screen for a glance would discard the layout, the camera, every
+  pinned node and the active lens, which is a violent price for curiosity. The
+  three links that genuinely leave are drawn differently and say so (`↗`).
+  Switching question re-fetches the ties and hands them to the *running*
+  simulation, so the field relaxes from where it stands into the new
+  relationships; which supervisors move and which hold still is itself a
+  finding, and rebuilding from scratch would destroy it.
+- **Selection cards the neighbourhood.** Each neighbour states its name, funded
+  slots and two words of subject matter in place. Subject is the one thing
+  position, size and colour cannot encode, and it is usually what decides where
+  to look next. Everything else lives in the record panel beside the graph —
+  plans, techniques, ranked evidence, and both halves of the collaboration.
+
+The three graphs are built in `webapp/network.py`. `entity_topics` holds no
+professor rows — the topic model is fitted over documents, not over people — so
+subject adjacency is derived from the plans each supervisor is offering.
+Similarity graphs are pruned per node rather than by a threshold alone: a plain
+cutoff either leaves a hairball or strands half the corpus.
 
 ---
 

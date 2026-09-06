@@ -30,3 +30,8 @@ personal/
 
 # Unpublished manuscripts kept for annexing to outreach. Not ours to publish.
 past_works/
+
+# The console's front end is a Vite project. Its dependencies are not vendored;
+# its build output (webapp/static) *is* committed, because that is what the
+# wheel ships and what `pulsar serve` hands to the browser.
+src/pulsar_research/webapp/frontend/node_modules/

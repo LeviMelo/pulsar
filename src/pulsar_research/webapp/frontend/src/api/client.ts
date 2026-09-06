@@ -1,0 +1,131 @@
+/* Data access.
+ *
+ * The console reads a corpus of a couple of hundred rows out of a local DuckDB
+ * file. Everything except campaign outcomes is immutable for the lifetime of a
+ * session, so the caching policy is simply "fetch once" — React Query holds the
+ * payloads, and the two mutating endpoints invalidate the keys they touch
+ * rather than the whole cache.
+ *
+ * The hooks below are the only place a URL is written. A view asks for
+ * `useProfessor(siape)`, not for a string, so a payload that moves cannot leave
+ * a stale path buried three files deep.
+ */
+
+import {
+  useMutation, useQuery, useQueryClient, type UseQueryResult,
+} from '@tanstack/react-query';
+import type {
+  AppState, CampaignDetail, EnginePayload, LandscapePayload, NetworkPayload,
+  OpportunitiesPayload, OutcomeResult, PlanDetail, ProfessorDetail,
+  ProfessorsPayload, ThreadState,
+} from './types';
+
+export async function fetchJson<T>(path: string): Promise<T> {
+  const response = await fetch(path, { headers: { Accept: 'application/json' } });
+  const payload = await response.json().catch(() => ({ error: 'malformed response' }));
+  if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+  return payload as T;
+}
+
+export async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => ({ error: 'malformed response' }));
+  if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+  return payload as T;
+}
+
+/** Corpus payloads never change while the page is open; outcomes do. */
+const STATIC_QUERY = { staleTime: Infinity, gcTime: Infinity } as const;
+
+export function useAppState(): UseQueryResult<AppState> {
+  return useQuery({ queryKey: ['state'], queryFn: () => fetchJson<AppState>('/api/state') });
+}
+
+export function useOpportunities() {
+  return useQuery({
+    queryKey: ['opportunities'],
+    queryFn: () => fetchJson<OpportunitiesPayload>('/api/opportunities'),
+    ...STATIC_QUERY,
+  });
+}
+
+export function usePlan(id: string | null) {
+  return useQuery({
+    queryKey: ['plan', id],
+    queryFn: () => fetchJson<PlanDetail>(`/api/opportunity/${encodeURIComponent(id!)}`),
+    enabled: Boolean(id),
+    ...STATIC_QUERY,
+  });
+}
+
+export function useProfessors() {
+  return useQuery({
+    queryKey: ['professors'],
+    queryFn: () => fetchJson<ProfessorsPayload>('/api/professors'),
+    ...STATIC_QUERY,
+  });
+}
+
+export function useProfessor(siape: string | null) {
+  return useQuery({
+    queryKey: ['professor', siape],
+    queryFn: () => fetchJson<ProfessorDetail>(`/api/professor/${encodeURIComponent(siape!)}`),
+    enabled: Boolean(siape),
+    ...STATIC_QUERY,
+  });
+}
+
+export function useLandscape(facet: 'domain' | 'methods') {
+  return useQuery({
+    queryKey: ['landscape', facet],
+    queryFn: () => fetchJson<LandscapePayload>(`/api/landscape?facet=${facet}`),
+    ...STATIC_QUERY,
+  });
+}
+
+export function useNetwork(mode: string) {
+  return useQuery({
+    queryKey: ['network', mode],
+    queryFn: () => fetchJson<NetworkPayload>(`/api/network?mode=${encodeURIComponent(mode)}`),
+    ...STATIC_QUERY,
+  });
+}
+
+export function useCampaign(id: string | null) {
+  return useQuery({
+    queryKey: ['campaign', id],
+    queryFn: () => fetchJson<CampaignDetail>(`/api/campaign/${encodeURIComponent(id!)}`),
+    enabled: Boolean(id),
+  });
+}
+
+export function useEngine() {
+  return useQuery({
+    queryKey: ['engine'],
+    queryFn: () => fetchJson<EnginePayload>('/api/engine'),
+    ...STATIC_QUERY,
+  });
+}
+
+/**
+ * Move a conversation, or annotate one.
+ *
+ * The funnel counts and the sidebar badge both derive from campaign rows, so a
+ * write invalidates the campaign and the app state together — the alternative
+ * is a funnel that disagrees with the table directly beneath it.
+ */
+export function useSaveOutcome(campaignId: string | null) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: { siape: string; state?: ThreadState; note?: string }) =>
+      postJson<OutcomeResult>('/api/outcome', { campaign_id: campaignId, ...patch }),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ['campaign', campaignId] });
+      client.invalidateQueries({ queryKey: ['state'] });
+    },
+  });
+}

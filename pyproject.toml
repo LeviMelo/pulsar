@@ -43,7 +43,14 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-pulsar_research = ["templates/*.j2", "templates/*.html"]
+pulsar_research = [
+  "templates/*.j2",
+  "templates/*.html",
+  # The console is a Vite build; webapp/static is its output directory, and the
+  # asset filenames are content-hashed, so the globs have to be wildcards.
+  "webapp/static/index.html",
+  "webapp/static/assets/*",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
