@@ -1,1 +1,1 @@
-{% if primary.edital %}{{ primary.edital }} — {% endif %}{{ primary.plan_title or primary.project_title or 'iniciação científica' }} — Levi de Melo Amorim
+Interesse no seu plano — {{ (primary.plan_title or primary.project_title or 'iniciação científica')|limpo|caixa|siglas|resumo(78) }}{% if primary.edital %} ({{ primary.edital|limpo|caixa|siglas }}){% endif %}

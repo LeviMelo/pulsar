@@ -35,16 +35,26 @@ PROFILE = {
     "contribution_default": ["database", "stats"],
     "annexes": [
         {"key": "lepto", "label": "Leptospirose 2007–2025", "recent": False,
+         "short": "leptospirose no Brasil", "blurb": "uma série temporal por região de saúde",
          "tags": ["time_series", "sinan"]},
-        {"key": "glp1", "label": "GLP-1 no SNGPC", "recent": True, "tags": ["datasus"]},
+        {"key": "glp1", "label": "GLP-1 no SNGPC", "recent": True,
+         "short": "GLP-1 no SNGPC", "blurb": "farmacoepidemiologia nacional",
+         "tags": ["datasus"]},
         {"key": "pulsar", "label": "Relatório técnico do PULSAR", "recent": True,
+         "short": "o relatório do PULSAR", "blurb": "corpus e avaliação".replace("ç", "ç"),
          "tags": ["machine_learning"]},
     ],
     "contacts": [{"address": "levi.amorim@famed.ufal.br", "purpose": "iniciação científica"},
                  {"address": "levi.amorim@nees.ufal.br", "purpose": "outros assuntos"}],
     "sending_note": "Esta mensagem sai do meu endereço pessoal.",
-    "expertise_note": "São dois anos trabalhando com ciência de dados, epidemiologia e computação científica, e é aí que eu rendo mais: em qualquer frente que se resolva no computador.",
-    "links": [{"label": "CMapDoc", "url": "https://levimelo.github.io/mapdoc/"}],
+    "expertise_note": "Trabalho há dois anos com ciência de dados, epidemiologia e computação científica.",
+    "offer_prompt": "Se for útil ao projeto, eu poderia contribuir mais diretamente nestas frentes:",
+    "closing_line": "Se a vaga ainda estiver aberta, fico à disposição para conversar "
+                    "sobre o plano quando lhe for conveniente.",
+    "links_intro": "Fora dos anexos, o que eu construo em software está público:",
+    "works_tail": "Desenvolvi também o CMapDoc ({cmapdoc}), e o código está no meu GitHub ({github}).",
+    "links": [{"key": "cmapdoc", "url": "https://levimelo.github.io/mapdoc/"},
+              {"key": "github", "url": "https://github.com/LeviMelo"}],
     "campaign_signature": "Levi de Melo Amorim",
 }
 PULSAR = {"n_opportunities": 187, "n_projects": 89, "n_professors": 65,
@@ -53,8 +63,10 @@ PULSAR = {"n_opportunities": 187, "n_projects": 89, "n_professors": 65,
               for b in ("title_to_body", "cross_project_area")
               for c, v in (("lexical_word", 0.9), ("latent", 0.7), ("fused", 0.8))])}
 SIGNATURE = "Levi de Melo Amorim"
-# The gated claim: only a strong fit may tell a recipient where they ranked.
-RANK_CLAIM = "O seu ficou em"
+# The gated claim. It used to be a position ("O seu ficou em 4º") drawn on a
+# scale: telling a professor his rank among his colleagues is a strange thing to
+# do, so what survives is the fact that the match was strong, without a number.
+FIT_CLAIM = "uma das correspondências mais fortes"
 
 
 def recipient(percentile: float, *, skills=("time_series",), applied=True, funded=1):
@@ -89,13 +101,17 @@ def body(percentile: float, **kw) -> str:
     return render(percentile, **kw)[1]
 
 
-def test_a_strong_fit_may_state_where_the_plan_ranked():
+def test_a_strong_fit_may_say_the_match_was_strong_but_never_where_it_ranked():
     text = body(98.0)
-    assert RANK_CLAIM in text and "5º" in text, "percentile 98 of 187 is roughly 5th"
+    assert FIT_CLAIM in text
+    # A position, a percentile and a drawn scale all told the recipient his place
+    # in a ranking of his colleagues. None of them belongs in this message.
+    for telemetry in ("O seu ficou em", "percentil", "MRR", "1º ├", "█"):
+        assert telemetry not in text
 
 
 def test_a_weak_fit_never_states_a_ranking():
-    assert RANK_CLAIM not in body(7.0)
+    assert FIT_CLAIM not in body(7.0)
 
 
 def test_a_weak_fit_may_still_name_what_the_plan_itself_asks_for():
@@ -106,14 +122,15 @@ def test_a_weak_fit_may_still_name_what_the_plan_itself_asks_for():
 
 
 def test_the_threshold_is_the_only_thing_that_gates_the_ranking():
-    assert RANK_CLAIM not in body(STRONG_FIT_PERCENTILE - 0.1)
-    assert RANK_CLAIM in body(STRONG_FIT_PERCENTILE)
+    assert FIT_CLAIM not in body(STRONG_FIT_PERCENTILE - 0.1)
+    assert FIT_CLAIM in body(STRONG_FIT_PERCENTILE)
 
 
 def test_every_draft_says_who_is_writing_on_the_first_screen():
     first = body(50.0).split("\n\n")[1]
     assert "5º período de Medicina na FAMED/UFAL" in first
-    assert "Registrei interesse no plano" in first
+    assert "Escrevo sobre o plano" in first
+    assert "registrei interesse no SIGAA" in first
 
 
 def test_every_draft_separates_registration_from_indication():
@@ -122,17 +139,32 @@ def test_every_draft_separates_registration_from_indication():
         text = body(percentile)
         # The registration is owned, not disclaimed: telling a professor it is
         # "no commitment" is both discourteous and, by now, untrue.
-        assert "chegou antes de mim" in text
-        assert "a indicação é única" in text
-        assert "vale com bolsa ou sem ela" in text, "the offer is not conditioned on funding"
-        assert "não é indicação nem compromisso" not in text,             "disclaiming a registration the professor can see is discourteous and untrue"
+        # Stated as an operational fact about the SIGAA records, not as a story
+        # about the automation arriving before its author.
+        assert "não devem ser lidos como compromissos simultâneos" in text
+        assert "autorização para uma indicação imediata" in text
+        assert "Estou resolvendo caso a caso" in text
+        for anthropomorphic in ("chegou antes de mim", "não é indicação nem compromisso"):
+            assert anthropomorphic not in text
 
 
-def test_the_scholarship_question_is_asked_plainly_in_every_draft():
+def test_the_scholarship_question_is_asked_inside_the_paragraph_that_motivates_it():
+    """The question and its reason are one paragraph, not two.
+
+    Standing alone it read as a demand arriving from nowhere. What licenses it
+    is the confirmed PIBITI: a second link is only worth making if it is funded,
+    and that premise has to be in the same breath as the question.
+    """
     for percentile in (0.0, 50.0, 100.0):
         text = body(percentile)
-        assert "A bolsa que consta no edital ainda está disponível?" in text
-        assert "Como só posso confirmar um vínculo" in text
+        paragraph = next(p for p in text.split(2 * chr(10))
+                         if "compromissos simultâneos" in p)
+        assert "outra oportunidade de PIBITI encaminhada" in paragraph
+        assert "priorizando as vagas com bolsa" in paragraph
+        assert "status real" in paragraph
+        # Not procurement: "só faria a troca por uma vaga com bolsa" read as
+        # switching suppliers for a better price.
+        assert "faria a troca" not in text
 
 
 def test_the_offer_is_built_from_the_plan_not_from_a_fixed_list():
@@ -187,35 +219,54 @@ def test_the_message_stays_short_enough_to_read_on_a_deadline_day():
     assert len(text) < 4400, f"a cold email of {len(text)} chars will not be read"
 
 
-def test_the_html_alternative_is_plain_prose_plus_exactly_one_card():
+def test_the_html_alternative_is_nothing_but_plain_prose():
     """The body pasted into a reply must not arrive as a stack of styled boxes."""
     markup = render(98.0)[2]
-    assert markup.count("<table") == 1, "the footer card is the only table"
-    assert markup.count("<pre") <= 1, "at most the one-line rank scale is preformatted"
+    assert markup.count("<table") == 0, "the measurement card is gone"
+    assert markup.count("<pre") == 0, "and so is every drawn panel"
     assert markup.count("<p>") >= 6, "the message itself is plain paragraphs"
     assert "background:#f4f6f8" not in markup, "no page chrome around the message"
 
 
-def test_the_footer_says_the_same_thing_in_both_alternatives():
+def test_neither_alternative_carries_the_measurement_footer():
+    """Corpus counts and a retrieval MRR under a cold email are telemetry.
+
+    They also implied the sender was scoring professors against one another.
+    The evaluation is in the attached report, where a reader who wants it looks.
+    """
     _, text, markup = render(98.0)
-    for token in ("15.019", "187", "PULSAR"):
-        assert token in text and token in markup
-    assert "https://levimelo.github.io/mapdoc/" in text
-    assert 'href="https://levimelo.github.io/mapdoc/"' in markup
+    for telemetry in ("15.019", "MRR", "percentil", "registros do SIGAA e do Lattes"):
+        assert telemetry not in text and telemetry not in markup
 
 
-def test_without_statistics_the_footer_is_omitted_and_the_message_still_stands():
+def test_the_built_software_is_named_in_the_body_not_buried_in_the_footer():
+    """The manuscripts show the analysis; these show he ships the software.
+
+    They lived in the footer card once, as two link chips under a measurement
+    box, which is where a reader stops reading. Both alternatives must carry
+    them in the message itself.
+    """
+    for percentile in (7.0, 98.0):
+        _, text, markup = render(percentile)
+        for url in ("https://levimelo.github.io/mapdoc/", "https://github.com/LeviMelo"):
+            assert url in text and url in markup
+        head, _, footer = text.partition("—" * 30)
+        assert "CMapDoc" in head, "the app must be named before the footer rule"
+        assert "github.com" not in footer, "no second copy under the card"
+
+
+def test_the_message_does_not_depend_on_the_corpus_statistics():
+    """It no longer quotes a single number from them, so it must render without."""
     text = body(98.0, pulsar=None)
-    assert "sistema de prospecção" not in text
-    assert "Registrei interesse no plano" in text
-    assert "A bolsa que consta no edital ainda está disponível?" in text
+    assert "Escrevo sobre o plano" in text
+    assert "priorizando as vagas com bolsa" in text
 
 
 def test_context_never_invents_a_fit_when_the_ranking_produced_none():
     ctx = build_context({"professor_name": "x", "qualifying_opportunities": [], "rationale": {}},
                         SIGNATURE, PROFILE)
     assert ctx["fit_is_strong"] is False and ctx["opportunity_percentile"] == 0.0
-    assert ctx["card"]["percentile"] == 0.0
+    assert FIT_CLAIM not in ctx["saudacao"]
 
 
 def test_the_declared_qualifications_never_name_the_restricted_counterpart():
@@ -247,7 +298,8 @@ def test_the_declared_qualifications_never_name_the_restricted_counterpart():
 @pytest.mark.parametrize("percentile", [0.0, 69.9, 70.0, 100.0])
 def test_no_draft_ever_loses_the_recipient_or_the_plan(percentile):
     text = body(percentile)
-    assert "Prezado(a) Prof(a). Maria das Gracas Taveira," in text
+    assert "Prezada professora Maria," in text
+    assert "Prof(a)" not in text, "a filled-in placeholder is not a salutation"
     assert "Plano Y" in text
 
 
@@ -255,8 +307,7 @@ def test_every_draft_says_where_the_work_is_best_spent():
     """A medical student writing to a lab is otherwise read as asking for bench time."""
     for percentile in (7.0, 98.0):
         text = body(percentile)
-        assert "dois anos trabalhando com ciência de dados" in text
-        assert "se resolva no computador" in text
+        assert "dois anos com ciência de dados" in text
 
 
 # Phrasings that kept reappearing while this template was being written: the

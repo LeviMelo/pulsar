@@ -19,6 +19,7 @@ import pandas as pd
 
 from ..db import Database, json_load
 from ..semantics.provenance import current_run_id
+from .nomes import accented_names
 
 
 @dataclass(slots=True)
@@ -178,6 +179,9 @@ def select_audience(db: Database, query: AudienceQuery, *, run_id: str | None = 
     current_pct = _professor_scores(db, run_id, "current", query.rank_channel) if run_id else {}
     trajectory_pct = _professor_scores(db, run_id, "trajectory", query.rank_channel) if run_id else {}
     readings = _opportunity_readings(db, run_id) if run_id else {}
+    # The salutation spells the recipient's own name, so it comes from the
+    # Lattes record rather than from the accent-stripped matching key.
+    accented = accented_names(db)
     evidence_rows = _evidence_by_professor(db, run_id) if run_id else {}
     skills_by_opp = _skills_by_entity(db, "opportunity")
 
@@ -191,6 +195,7 @@ def select_audience(db: Database, query: AudienceQuery, *, run_id: str | None = 
         recipient = grouped.setdefault(siape, {
             "siape": siape,
             "professor_name": row.get("canonical_name") or "",
+            "professor_display_name": accented.get(siape, ""),
             "email": row.get("email") or "",
             "department": row.get("department") or "",
             "center": row.get("center") or "",

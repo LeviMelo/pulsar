@@ -16,7 +16,9 @@ from typing import Any, Mapping
 from jinja2 import Environment, StrictUndefined, Undefined
 
 from ..semantics.normalize import display_person_name
-from .panels import FACET_LABELS, card_lines, decimal, fit_bars, rank_scale
+from .caixa import desgritar
+from .panels import decimal
+from .saudacao import saudacao
 
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 
@@ -29,6 +31,84 @@ def _milhar(value) -> str:
         return str(value)
 
 
+_EXTENSO = ["zero", "um", "dois", "tres", "quatro", "cinco",
+            "seis", "sete", "oito", "nove", "dez"]
+_EXTENSO[3] = "tr" + chr(234) + "s"
+
+
+def _extenso(value) -> str:
+    """4 -> 'quatro'. A small count reads as a word in a sentence, not a digit."""
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return str(value)
+    return _EXTENSO[number] if 0 <= number < len(_EXTENSO) else str(number)
+
+
+# SIGAA stores edital names title-cased, which turns every acronym in them into
+# a word: "Edital 03 Pibiti Ufal 2026-2027". A professor reading that in the
+# first line of a cold email reads carelessness, so the known acronyms are put
+# back. Only exact whole-word matches are touched.
+_SIGLAS = ("PIBIC", "PIBITI", "PIBIC-AF", "UFAL", "SUS", "IBGE", "CNPQ", "FAPEAL",
+           "PROPEP", "IC", "SIGAA")
+
+
+def _siglas(value) -> str:
+    text = str(value)
+    for sigla in _SIGLAS:
+        text = re.sub(rf"\b{re.escape(sigla)}\b", sigla, text, flags=re.IGNORECASE)
+    # A handful of terms are neither plain words nor plain acronyms; their
+    # canonical casing is part of the name, and they land in the second line of
+    # a message to the professor who studies them.
+    for wrong, right in (("CNPQ", "CNPq"), ("MICRORNAS", "microRNAs"),
+                         ("MICRORNA", "microRNA"), ("micrornas", "microRNAs"),
+                         ("microrna", "microRNA")):
+        text = text.replace(wrong, right)
+    return text
+
+
+def _limpo(value) -> str:
+    """Collapse the whitespace SIGAA left inside a scraped title.
+
+    Ten of the 187 plan and project titles carry a hard line break from the page
+    they were lifted off, which renders mid-sentence in the middle of a
+    paragraph and reads as a broken email.
+    """
+    return " ".join(str(value).split()).rstrip(".")
+
+
+def _caixa(value) -> str:
+    """Sentence-case a plan title that SIGAA stores shouted in capitals."""
+    return desgritar(value, frozenset(_SIGLAS))
+
+
+def _resumo(value, limit: int = 95) -> str:
+    """Cap a title on a word boundary, for the subject line.
+
+    Plan titles run to 200 characters. A subject that long is truncated by every
+    client at roughly the point where the sender name would have been, so the
+    one thing the recipient needs after their own plan never appears.
+    """
+    text = str(value)
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rsplit(" ", 1)[0].rstrip(",;:—-")
+    return cut + "…"
+
+
+def _minuscula(value) -> str:
+    """Lower a skill label for mid-sentence use without destroying acronyms.
+
+    A blind `|lower` turned the R language into a bare "r": the message read
+    "o seu plano pede r e bioestatistica". Only the first letter moves, and only
+    when the label is not itself an acronym.
+    """
+    text = str(value).strip()
+    if not text or text.isupper() or len(text) <= 2:
+        return text
+    return text[0].lower() + text[1:]
+
+
 def _environment(strict: bool = True) -> Environment:
     env = Environment(
         undefined=StrictUndefined if strict else Undefined,
@@ -39,6 +119,12 @@ def _environment(strict: bool = True) -> Environment:
     )
     env.filters["milhar"] = _milhar
     env.filters["decimal"] = decimal
+    env.filters["extenso"] = _extenso
+    env.filters["siglas"] = _siglas
+    env.filters["limpo"] = _limpo
+    env.filters["minuscula"] = _minuscula
+    env.filters["resumo"] = _resumo
+    env.filters["caixa"] = _caixa
     return env
 
 
@@ -121,12 +207,35 @@ def select_annexes(primary: Mapping[str, Any], profile: Mapping[str, Any]) -> li
     return annexes
 
 
-def _rank_from_percentile(percentile: float, pulsar: Mapping[str, Any] | None) -> int:
-    """Percentile back to a position, for a sentence a reader parses instantly."""
-    total = int((pulsar or {}).get("n_opportunities") or 0)
-    if total <= 0:
-        return 0
-    return max(1, min(total, int(round((100.0 - percentile) / 100.0 * total)) + 1))
+def _works_line(annexes: list[dict[str, Any]], profile: Mapping[str, Any]) -> str:
+    """The one paragraph that carries the prior work, as a sentence.
+
+    It was a five-line annotated list of manuscripts followed by a second list
+    of links under a heading. Four attachments, two public projects, a list of
+    methodological tasks and a quantitative footer stop reading as evidence and
+    start reading as insecurity, so the message names the annex that bears on
+    this plan, says how many others came with it, and moves on.
+    """
+    if not annexes:
+        return ""
+    recent = sum(1 for a in annexes if a.get("recent"))
+    sentence = f"Anexei {_extenso(len(annexes))} trabalhos meus"
+    if recent:
+        sentence += f", {_extenso(recent)} escritos nesta semana"
+    marked = next((a for a in annexes if a.get("emphasised") and a.get("short")), None)
+    if marked:
+        sentence += f"; o mais próximo do seu plano é o de {marked['short']}"
+        if marked.get("blurb"):
+            sentence += f", {marked['blurb']}"
+        sentence += "."
+    else:
+        sentence += ", para sua apreciação."
+
+    tail = profile.get("works_tail") or ""
+    urls = {str(l.get("key")): str(l.get("url")) for l in (profile.get("links") or [])}
+    if tail and all(("{" + k + "}") in tail for k in urls):
+        sentence += " " + tail.format(**urls)
+    return sentence
 
 
 def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping[str, Any],
@@ -143,11 +252,18 @@ def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping
     percentile = float(rationale.get("opportunity_percentile") or 0.0)
     pulsar = dict(extra or {}).get("pulsar")
     fit_is_strong = percentile >= STRONG_FIT_PERCENTILE
-    rank = _rank_from_percentile(percentile, pulsar)
     annexes = select_annexes(primary, profile)
+    display_name = (recipient.get("professor_display_name")
+                    or display_person_name(recipient.get("professor_name", "")))
+    contributions = select_contributions(primary, profile)
+    expertise_note = profile.get("expertise_note") or ""
+    offer_prompt = (profile.get("offer_prompt") or "") if contributions else ""
     return {
         **dict(recipient),
-        "professor_name": display_person_name(recipient.get("professor_name", "")),
+        # The Lattes spelling when it was recoverable, otherwise the
+        # title-cased matching key. `display_person_name` cannot put the
+        # accents back, so a name it produces is a fallback, not the target.
+        "professor_name": display_name,
         "primary": primary,
         "opportunities": opportunities,
         "rationale": rationale,
@@ -158,35 +274,28 @@ def build_context(recipient: Mapping[str, Any], signature: str, profile: Mapping
         "opportunity_percentile": percentile,
         "fit_is_strong": fit_is_strong,
         "already_applied": bool(rationale.get("already_applied")),
-        # The message body carries no chart. The retrieval battery lives in the
-        # attached report, where a professor who wants it can find it; in the
-        # body it was four paragraphs of method between the recipient and the
-        # question being asked. What survives is the compact summary in the
-        # footer card, which is the one piece of HTML in the message.
-        "card": {
-            "stats": pulsar,
-            "reading": (rationale.get("reading") or {}) if fit_is_strong else {},
-            "percentile": percentile if fit_is_strong else 0.0,
-        },
         "identity_line": profile.get("identity_line") or "",
-        # A position is concrete where a percentile is jargon: "4º de 187" is
-        # read correctly by everyone, "percentil 98" by fewer.
-        "opportunity_rank": rank,
-        "facet_labels": list(FACET_LABELS.items()),
+        # "Prezado(a) Prof(a). Diego Figueiredo Nóbrega" advertises the template.
+        # Generating each message individually is pointless if the result still
+        # reads as a filled-in placeholder.
+        "saudacao": saudacao(display_name),
+        "works_line": _works_line(annexes, profile),
         # Chosen against this plan's own extracted skills, not listed wholesale.
-        "contributions": select_contributions(primary, profile),
+        "contributions": contributions,
         "annexes": annexes,
-        "annex_recent_count": sum(1 for a in annexes if a.get("recent")),
         "about_lines": list(profile.get("about_lines") or []),
         "contacts": list(profile.get("contacts") or []),
         "sending_note": profile.get("sending_note") or "",
-        "expertise_note": profile.get("expertise_note") or "",
-        # One line, and only where a rank may be stated at all.
-        # Carries its own blank line: leaving the spacing to a Jinja {% if %}
-        # made the paragraph break disappear whenever the scale was absent.
-        "rank_block": ("\n\n" + rank_scale(rank, int((pulsar or {}).get("n_opportunities") or 0)))
-                      if fit_is_strong else "",
-        "fit_bars": fit_bars(rationale.get("reading")) if fit_is_strong else [],
+        "expertise_note": expertise_note,
+        # The general claim and the tailored list are one movement: "this is what
+        # I am good at, and here is what that means for your plan." Split across
+        # two paragraphs the first one floated, arriving after a paragraph about
+        # scholarship logistics with nothing to attach to. Joined in Python
+        # rather than in the template because Jinja's block trimming eats the
+        # newline off any line that ends in a tag, which is how the two halves
+        # got welded together the last three times this was attempted there.
+        "offer_lead": " ".join(x for x in (expertise_note, offer_prompt) if x),
+        "closing_line": profile.get("closing_line") or "",
         "links": list(profile.get("links") or []),
         "signature": signature,
         "sender_name": profile.get("sender_name") or (signature.splitlines() or [""])[0],
@@ -275,18 +384,13 @@ def render_message(
 ) -> tuple[str, str, str]:
     """Returns ``(subject, plaintext, html)`` for one recipient.
 
-    The footer exists twice, from one set of values: as a styled card in the
-    HTML alternative and as plain lines in the text one. It is appended after
-    the HTML is rendered so the card is not also spelled out inside it.
+    There is no measurement footer under either alternative any more. The
+    corpus counts, the retrieval MRR and the per-facet percentile bars were
+    telemetry: they told a professor reading on deadline day where he sat
+    inside a ranking, which implies the sender is scoring his colleagues
+    against one another. The evaluation is in the attached report, where a
+    reader who wants it will look.
     """
     context = build_context(recipient, signature, profile, extra=extra)
     subject, body = render_text(subject_template, body_template, context)
-    body_html = render_html(body, {**context, "subject": subject}, theme=theme)
-
-    footer = card_lines(context.get("card"))
-    for link in context.get("links") or []:
-        footer.append(f"{link['label']}: {link['url']}")
-    if footer:
-        rule = "—" * 30
-        body = body.rstrip() + "\n\n" + rule + "\n" + "\n".join(footer) + "\n"
-    return subject, body, body_html
+    return subject, body, render_html(body, {**context, "subject": subject}, theme=theme)

@@ -1,34 +1,28 @@
-Prezado(a) Prof(a). {{ professor_name }},
+{{ saudacao }},
 
-Sou Levi de Melo Amorim, {{ identity_line }}. Registrei interesse no plano “{{ primary.plan_title or primary.project_title }}”{% if primary.project_title and primary.plan_title and primary.project_title != primary.plan_title %}, do projeto “{{ primary.project_title }}”{% endif %}{% if primary.edital %} ({{ primary.edital }}){% endif %}{% if already_applied %} — a inscrição que o SIGAA notificou há alguns dias{% endif %}.
+Sou Levi de Melo Amorim, {{ identity_line }}. Escrevo sobre o plano “{{ (primary.plan_title or primary.project_title)|limpo|caixa|siglas }}”{% if primary.project_title and primary.plan_title and primary.project_title != primary.plan_title %}, do projeto “{{ primary.project_title|limpo|caixa|siglas }}”{% endif %}{% if primary.edital %} ({{ primary.edital|limpo|caixa|siglas }}){% endif %}, no qual registrei interesse no SIGAA{% if already_applied %} há alguns dias{% endif %}.
 
-Cheguei até ele pelo PULSAR, um sistema que construí para organizar a minha própria candidatura: ele indexou os {{ pulsar.n_opportunities|milhar if pulsar else '' }} planos deste edital junto com a produção pública dos orientadores e os ordenou por afinidade com o que eu sei fazer.{% if fit_is_strong %} O seu ficou em {{ opportunity_rank }}º{% if matched_skills %}, sobretudo por {{ matched_skills[:2]|join(' e ')|lower }}{% endif %}.{% elif matched_skills %} O seu plano pede {{ matched_skills[:2]|join(' e ')|lower }}, que é trabalho que eu já faço.{% endif %}{{ rank_block }}
+Cheguei até ele pelo PULSAR, um sistema de prospecção que desenvolvi para acompanhar este ciclo: ele indexa os planos abertos junto com a produção pública dos orientadores e identifica onde há sobreposição real com a minha experiência.{% if fit_is_strong %} O seu foi uma das correspondências mais fortes que ele encontrou{% if matched_skills %}, sobretudo por {{ matched_skills[:2]|map('minuscula')|join(' e ') }}{% endif %}.{% elif matched_skills %} O seu plano pede {{ matched_skills[:2]|map('minuscula')|join(' e ') }}, que é exatamente o tipo de trabalho que eu já faço.{% endif +%}
 
-O registro de interesse foi automático, em todos os planos suficientemente compatíveis, e por isso chegou antes de mim: estou falando individualmente com cada orientador antes de indicar qualquer coisa no SIGAA, porque a indicação é única e não quero travar conversas que ainda estão abertas dos dois lados. O interesse vale com bolsa ou sem ela.
-{% if expertise_note %}
+O PULSAR registrou esse interesse automaticamente, em todos os planos suficientemente compatíveis, de modo que os registros no SIGAA não devem ser lidos como compromissos simultâneos nem como autorização para uma indicação imediata. Estou resolvendo caso a caso, diretamente com cada orientador. Já tenho outra oportunidade de PIBITI encaminhada e, como as regras de vínculo e de bolsa limitam o que posso efetivamente aceitar, estou priorizando as vagas com bolsa: preciso saber o status real da que consta no edital para este plano antes que qualquer indicação avance dos dois lados.
+{% if offer_lead %}
 
-{{ expertise_note }}
+{{ offer_lead }}
 {% endif %}
 {% if contributions %}
-
-No seu plano especificamente, eu poderia assumir:
 
 {% for line in contributions %}
 - {{ line }}
 {% endfor %}
 {% endif %}
-{% if annexes %}
+{% if works_line %}
 
-Anexei {{ annexes|length }} documentos{% if annex_recent_count %}, {{ annex_recent_count }} deles escritos nesta semana{% endif %} — rascunhos avançados, não publicações:
-
-{% for a in annexes %}
-- {{ a.label }}{{ "  ← o mais próximo do seu plano" if a.emphasised else "" }}
-{% endfor %}
+{{ works_line }}
 {% endif %}
+{% if closing_line %}
 
-A bolsa que consta no edital ainda está disponível? Como só posso confirmar um vínculo, preciso saber onde ele faz sentido antes de o prazo fechar.
-
-A lista de tarefas acima e o destaque no anexo saem do PULSAR, a partir do texto do plano. Nem sempre acertam; se algo soar deslocado, é limitação do sistema.
+{{ closing_line }}
+{% endif %}
 
 {{ signature }}
 {% for c in contacts %}

@@ -1,14 +1,14 @@
-"""The compact measurement summary that rides in the footer of an outreach mail.
+"""Reducing the stored retrieval benchmarks to the few numbers a report quotes.
 
-An earlier version drew the whole retrieval battery into the message body as a
-monospaced table. It was accurate and it was wrong for the medium: four
-paragraphs of method stood between a professor reading on deadline day and the
-question being asked, and the monospaced blocks made the message awkward to
-quote or copy. The battery now lives in the attached report, where a reader who
-wants it will find it, and only a three-line summary survives here.
+This module used to draw panels for the outreach message: a ranked scale, a
+per-facet bar chart, a footer card of corpus counts and MRR. All of it is gone.
+Telling a professor where his own plan sat in a ranking of his colleagues' plans
+is a strange thing to do in a cold email, and the counts under it read as a
+product demo rather than as a student writing to a potential supervisor. The
+evaluation belongs in the attached report, and that is where it now lives.
 
-`benchmark_summary` is still computed from the store rather than written down,
-so a rebuilt semantic space cannot leave a stale number inside an email.
+What survives is `benchmark_summary`, computed from the store rather than
+written down, so a rebuilt semantic space cannot leave a stale number behind.
 """
 
 from __future__ import annotations
@@ -23,60 +23,6 @@ TASK_ORDER = [
     "professor_holdout",
 ]
 CHANNEL_ORDER = ["lexical_word", "lexical_char", "bm25", "bm25f", "latent", "neural", "fused"]
-
-FACET_LABELS: dict[str, str] = {
-    "domain": "tema",
-    "methods": "métodos",
-    "skills": "competências",
-}
-
-
-# Full block plus the eighth-width partials, so a bar has sub-character
-# resolution and two nearby values stay visually distinct.
-_PARTIALS = "▏▎▍▌▋▊▉"
-_TRACK = "·"
-INDENT = "   "
-
-
-def bar(value: float, maximum: float, width: int) -> str:
-    """A horizontal bar of `width` cells, with an explicit track behind it.
-
-    The track matters: without it a reader cannot tell a short bar from a
-    truncated axis.
-    """
-    if maximum <= 0 or width <= 0:
-        return _TRACK * max(width, 0)
-    cells = max(0.0, min(1.0, value / maximum)) * width
-    full = int(cells)
-    out = "█" * min(full, width)
-    remainder = cells - full
-    if full < width and remainder >= 1 / 16:
-        out += _PARTIALS[min(len(_PARTIALS) - 1, int(remainder * 8))]
-    return out + _TRACK * (width - len(out))
-
-
-def rank_scale(rank: int, total: int, width: int = 38) -> str:
-    """One line placing a plan on the whole ranked list.
-
-    "5º de 187" is already concrete; seeing the marker sit hard against the left
-    end is what makes it land. Deliberately one line — the previous version of
-    this message carried a nine-row table and buried the question being asked.
-    """
-    if rank <= 0 or total <= 1:
-        return ""
-    position = min(width - 1, max(0, round((rank - 1) / (total - 1) * (width - 1))))
-    return f"{INDENT}1º ├{'─' * position}●{'─' * (width - 1 - position)}┤ {total}º"
-
-
-def fit_bars(reading: Mapping[str, Any] | None, width: int = 16) -> list[tuple[str, str, str]]:
-    """`(label, bar, value)` per facet, for the footer in either alternative.
-
-    Returned as parts rather than a formatted string so the HTML card and the
-    plaintext footer lay them out for their own medium while sharing the values.
-    """
-    facets = (reading or {}).get("facets") or {}
-    return [(FACET_LABELS[key], bar(float(facets[key]), 100.0, width), f"p{float(facets[key]):.0f}")
-            for key in FACET_LABELS if key in facets]
 
 
 def decimal(value: float, places: int = 2) -> str:
@@ -121,35 +67,3 @@ def benchmark_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "fused_mrr": means.get("fused", 0.0),
         "fused_worst": max(fused_ranks) if fused_ranks else 0,
     }
-
-
-def card_lines(card: Mapping[str, Any] | None) -> list[str]:
-    """The footer, as plain lines.
-
-    The same values the HTML card renders, so the two alternatives of the
-    message cannot drift apart: one function, two presentations.
-    """
-    stats = (card or {}).get("stats") or {}
-    if not stats:
-        return []
-    lines = ["PULSAR — sistema de prospecção de oportunidades de pesquisa, "
-             "desenvolvido por mim"]
-    lines.append(
-        f"{stats.get('n_opportunities', 0):,}".replace(",", ".") + " planos · "
-        + f"{stats.get('n_projects', 0):,}".replace(",", ".") + " projetos · "
-        + f"{stats.get('n_professors', 0):,}".replace(",", ".") + " docentes · "
-        + f"{stats.get('n_atoms', 0):,}".replace(",", ".") + " registros do SIGAA e do Lattes"
-    )
-    benchmark = stats.get("benchmark") or {}
-    if benchmark:
-        lines.append(
-            f"ranqueamento avaliado em {benchmark['n_tasks']} tarefas de recuperação "
-            f"(MRR {decimal(benchmark['fused_mrr'])}); método e resultados no relatório em anexo"
-        )
-    bars = fit_bars((card or {}).get("reading")) if (card or {}).get("percentile") else []
-    if bars:
-        lines.append("")
-        lines.append(f"este plano, percentil {float(card['percentile']):.0f}:")
-        pad = max(len(label) for label, _, _ in bars) + 1
-        lines.extend(f"  {label.ljust(pad)}{drawn}  {value}" for label, drawn, value in bars)
-    return lines

@@ -7,10 +7,10 @@
    mail, so the body here is plain paragraphs in the reader's own default size,
    with no background, no border and no table around it.
 
-   The one deliberate piece of HTML is the footer card. It is self-contained,
-   sits after the signature where it cannot interrupt the message, and carries
-   the measurements that used to clutter the body. Its plaintext equivalent is
-   `panels.card_lines`, rendered into the text alternative from the same values.
+   There is no footer card any more either. It carried corpus counts, a
+   retrieval MRR and per-facet percentile bars, which is telemetry: it told the
+   recipient where he ranked, and implied the sender was scoring professors
+   against one another. The evaluation is in the attached report.
 
    Inline CSS only: Gmail and Outlook strip <style> unpredictably, and no client
    runs JavaScript. Nothing here loads an external asset. #}
@@ -25,44 +25,6 @@
 <div style="max-width:600px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a;">
 {{ body_html }}
 
-{% if card and card.stats %}
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-       style="margin:26px 0 4px;border-collapse:collapse;">
-  <tr><td style="border:1px solid #d8dde3;border-radius:6px;padding:14px 16px;background:#fbfcfd;
-                 font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
-                 font-size:12px;line-height:1.6;color:#4a5560;">
-    <div style="font-weight:700;color:#1a1a1a;letter-spacing:.02em;">PULSAR</div>
-    <div style="margin-top:1px;">sistema de prospecção de oportunidades de pesquisa, desenvolvido por mim</div>
-    <div style="margin-top:9px;color:#1a1a1a;">
-      <strong>{{ card.stats.n_opportunities|milhar }}</strong> planos ·
-      <strong>{{ card.stats.n_projects|milhar }}</strong> projetos ·
-      <strong>{{ card.stats.n_professors|milhar }}</strong> docentes ·
-      <strong>{{ card.stats.n_atoms|milhar }}</strong> registros extraídos do SIGAA e do Lattes
-    </div>
-    {% if card.stats.benchmark %}
-    <div style="margin-top:4px;">
-      ranqueamento avaliado em {{ card.stats.benchmark.n_tasks }} tarefas de recuperação,
-      MRR {{ card.stats.benchmark.fused_mrr|decimal }} — método e resultados no relatório em anexo
-    </div>
-    {% endif %}
-    {% if fit_bars %}
-    <div style="margin-top:10px;padding-top:9px;border-top:1px solid #e6eaee;">
-      <div style="color:#1a1a1a;">este plano, percentil <strong>{{ card.percentile|round|int }}</strong>:</div>
-      {# The same strings the plaintext footer prints, so the two alternatives
-         cannot drift. Monospace is what makes a drawn bar mean anything. #}
-      <div style="margin-top:3px;font-family:Consolas,'Liberation Mono',Menlo,monospace;font-size:12px;line-height:1.5;white-space:pre;">
-{% for label, drawn, value in fit_bars %}{{ "%-13s"|format(label) }}{{ drawn }}  {{ value }}
-{% endfor %}</div>
-    </div>
-    {% endif %}
-    {% if links %}
-    <div style="margin-top:9px;">
-      {% for l in links %}<a href="{{ l.url }}" style="color:#3060a8;text-decoration:none;">{{ l.label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}
-    </div>
-    {% endif %}
-  </td></tr>
-</table>
-{% endif %}
 </div>
 </body>
 </html>

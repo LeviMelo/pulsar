@@ -86,7 +86,7 @@ semantic_profile: >-
 # else is either selected because it bears on the recipient's own plan, or lives
 # in the annexes. A catalogue of memberships buries the reason for writing.
 identity_line: >-
-  estudante do 5º período de Medicina na FAMED/UFAL e pesquisador bolsista no
+  estudante do 5º período de Medicina na FAMED/UFAL e membro do
   NEES/UFAL
 
 # Where the work is actually best spent. Stated once, immediately before the
@@ -94,41 +94,28 @@ identity_line: >-
 # asking for bench time. "Dois anos" is independent, continuous practice — not a
 # formal appointment — so it is phrased as work done rather than a post held.
 expertise_note: >-
-  São dois anos trabalhando com ciência de dados, epidemiologia e computação
-  científica, e é aí que eu rendo mais: em qualquer frente que passe por dados ou
-  se resolva no computador — aquisição, tratamento, modelagem, análise e a redação
-  que sai daí.
+  Trabalho há dois anos com ciência de dados, epidemiologia e computação científica.
+offer_prompt: "Se for útil ao projeto, eu poderia contribuir mais diretamente nestas frentes:"
 
-# Reserve, not a script. Nothing here is emitted unless it is selected against
-# the recipient's own plan; the SIGAA qualifications field already carries the
-# full background and the email must not reproduce it.
-about_lines:
-  - "pesquisador bolsista no NEES/UFAL, em sistemas de informação em saúde e tratamento de bases públicas do SUS"
-  - "projeto multicêntrico de reumatologia no PIC/HU Brasil sob orientação do Prof. Thiago Sotero Fragoso, com UFAL, UFMG, UFRGS e UNICAMP"
-  - "direção científica do IFMSA-UFAL e do projeto de extensão HEMOMAIS (UNIMA)"
-  - "cofundador e diretor de iniciação científica da Liga Acadêmica de Cirurgia Cardiovascular da UFAL"
-  - "monitor de Bioquímica I na graduação em Medicina do UNIMA/Afya"
-  - "formação técnica em Eletroeletrônica pelo IFAL — Campus Arapiraca; menção honrosa na OBMEP e na Olimpíada Alagoana de Matemática"
+# The message has to end going somewhere. It used to end on the disclaimer
+# about machine-written lines, which meant the last thing a reader carried
+# away was "some of this may be wrong".
+closing_line: >-
+  Se a vaga ainda estiver aberta, fico à disposição para conversar sobre o plano.
 
-# WHAT I WOULD DO. Skills map to a contribution *key*, not to a sentence, and
-# the keys are what gets deduplicated. Mapping straight to text let a default
-# ("conduzir a análise estatística de forma reprodutível") be appended next to a
-# near-identical skill-matched line, because the two strings differed. At most
-# three keys survive; `contribution_default` fills a plan whose skills match none
-# and is filtered against whatever was already chosen.
 contribution_texts:
-  stats: "conduzir a análise estatística, do desenho ao ajuste dos modelos e à checagem de pressupostos"
-  temporal: "montar a análise de tendência temporal, incluindo correção de autocorrelação serial"
-  spatial: "montar a análise espacial — autocorrelação, varredura de clusters e os mapas do artigo"
-  sus: "automatizar a extração e o tratamento das bases do SUS, com congelamento das fontes e proveniência por SHA-256"
-  denominators: "levantar e normalizar os denominadores populacionais e a malha geográfica do estudo"
-  review: "estruturar a revisão sistemática: estratégia de busca documentada, triagem em duplicata e extração"
-  meta: "conduzir a metanálise, incluindo heterogeneidade, análise de subgrupos e viés de publicação"
-  design: "operacionalizar o desenho do estudo: desfechos, critérios de elegibilidade e plano de análise por escrito"
-  ml: "implementar e validar os modelos, com avaliação fora da amostra e não apenas métricas de treino"
-  database: "construir e curar a base de dados do projeto, da integração das fontes ao controle de qualidade"
-  frontend: "desenvolver a interface ou o painel de exploração dos resultados"
-  writing: "preparar as figuras, as tabelas e o texto para submissão"
+  stats: "a análise estatística, do desenho ao ajuste dos modelos e à checagem de pressupostos"
+  temporal: "a análise de tendência temporal, incluindo a correção de autocorrelação serial"
+  spatial: "a análise espacial — autocorrelação, varredura de clusters e os mapas do artigo"
+  sus: "a extração e o tratamento das bases do SUS, com congelamento das fontes e proveniência por SHA-256"
+  denominators: "o levantamento e a normalização dos denominadores populacionais e da malha geográfica"
+  review: "a estruturação da revisão sistemática: busca documentada, triagem em duplicata e extração"
+  meta: "a metanálise, incluindo heterogeneidade, análise de subgrupos e viés de publicação"
+  design: "a operacionalização do desenho: desfechos, critérios de elegibilidade e plano de análise por escrito"
+  ml: "a implementação e a validação dos modelos, com avaliação fora da amostra"
+  database: "a construção e a curadoria da base de dados, da integração das fontes ao controle de qualidade"
+  frontend: "a interface ou o painel de exploração dos resultados"
+  writing: "a preparação das figuras, das tabelas e do texto para submissão"
 
 contribution_by_skill:
   biostatistics: stats
@@ -175,19 +162,27 @@ contribution_default: [database, stats, writing]
 #   leptospirose 14/08 — older, and therefore flagged false.
 annexes:
   - key: lepto
+    short: "leptospirose no Brasil (2007–2025)"
+    blurb: "um estudo ecológico de séries temporais por região de saúde, com modelagem binomial hierárquica e estrutura espacial"
     label: "Leptospirose no Brasil, 2007–2025 — estudo ecológico de séries temporais por região de saúde/ano, com modelagem binomial hierárquica e estrutura espacial"
     recent: false
     tags: [sinan, time_series, spatial_stats, geoprocessing]
   - key: glp1_nacional
+    short: "agonistas de GLP-1 no SNGPC/Anvisa"
+    blurb: "farmacoepidemiologia nacional, por UF e região"
     label: "Agonistas de GLP-1 no SNGPC/Anvisa — farmacoepidemiologia nacional, por UF e região"
     recent: true
     tags: [datasus, python, sql]
   - key: glp1_municipal
+    short: "agonistas de GLP-1 com resolução municipal"
+    blurb: "o mesmo desenho sobre as 5.571 unidades, com integração multibase e modelagem espacial"
     label: "Agonistas de GLP-1 no SNGPC/Anvisa — o mesmo desenho com resolução municipal, sobre as 5.571 unidades, com integração multibase e modelagem espacial"
     recent: true
     tags: [ibge, spatial_stats, geoprocessing]
   - key: pulsar
-    label: "Relatório técnico do PULSAR — construção do corpus, estrutura temática e a avaliação de recuperação resumida no rodapé"
+    short: "o relatório técnico do PULSAR"
+    blurb: "construção do corpus, estrutura temática e a avaliação de recuperação"
+    label: "Relatório técnico do PULSAR — construção do corpus, estrutura temática e a avaliação de recuperação"
     recent: true
     tags: [machine_learning, web_dev, literature_db]
 
@@ -197,17 +192,27 @@ annexes:
 # correctly — but the discrepancy is visible to the recipient, and a cold email
 # that appears to misrepresent its sender is worse than one that explains itself.
 sending_note: >-
-  Esta mensagem sai do meu endereço pessoal: o institucional não permite o envio
-  automatizado que uso aqui. Uma resposta direta já chega ao meu e-mail da UFAL.
+  Esta mensagem sai do meu endereço pessoal por limitação do e-mail institucional;
+  para responder, prefira o endereço da FAMED acima.
 contacts:
   - address: "levi.amorim@famed.ufal.br"
-    purpose: "iniciação científica, e o que for deste edital"
+    purpose: "para esta candidatura e para iniciação científica"
   - address: "levi.amorim@nees.ufal.br"
-    purpose: "outros assuntos acadêmicos ou técnicos"
+    purpose: "para outros assuntos acadêmicos ou técnicos"
 
+# The works paragraph. One sentence, not a catalogue: the four manuscripts are
+# attached anyway, so the message names the one that bears on this plan and lets
+# the rest be found. The links follow in the same breath, stated rather than
+# defended -- "escrevo eu mesmo todo o codigo" read as though the recipient were
+# expected to suspect the projects were not his.
+works_tail: >-
+  Desenvolvi também o CMapDoc, uma aplicação web de mapas conceituais interativos
+  ({cmapdoc}), e o código do PULSAR e dos demais projetos está no meu GitHub ({github}).
 links:
-  - label: "CMapDoc"
+  - key: cmapdoc
     url: "https://levimelo.github.io/mapdoc/"
+  - key: github
+    url: "https://github.com/LeviMelo"
 
 # Sent verbatim to SIGAA when an application is explicitly confirmed.
 qualifications_text: |-
