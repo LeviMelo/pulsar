@@ -274,6 +274,65 @@ CREATE TABLE IF NOT EXISTS embedding_cache (
 """
 
 # ---------------------------------------------------------------------------
+# Records: the archive, read
+# ---------------------------------------------------------------------------
+
+#: Derived. One row per dated, attributable fact about a person — a paper, an
+#: appointment, a degree, a committee, a student — extracted from the Lattes
+#: object and the public SIGAA tables by `records/`. One shape for every family,
+#: so a timeline, a search and a count are one query each. Rebuilt from the
+#: archive; never edited.
+RECORDS_SCHEMA = r"""
+CREATE TABLE IF NOT EXISTS records (
+    record_id VARCHAR PRIMARY KEY,
+    siape VARCHAR,
+    family VARCHAR,
+    form VARCHAR,
+    title VARCHAR,
+    year BIGINT,
+    year_end BIGINT,
+    status VARCHAR,
+    org VARCHAR,
+    org_code VARCHAR,
+    counterpart VARCHAR,
+    counterpart_id VARCHAR,
+    venue VARCHAR,
+    doi VARCHAR,
+    language VARCHAR,
+    nature VARCHAR,
+    keywords_json VARCHAR,
+    areas_json VARCHAR,
+    people_json VARCHAR,
+    payload_json VARCHAR,
+    source VARCHAR,
+    source_ref VARCHAR,
+    search_text VARCHAR,
+    computed_at VARCHAR
+);
+
+-- Everyone named on a record, tall, so "who has this person sat on a board
+-- with" and "who are this person's co-authors" are one GROUP BY each.
+CREATE TABLE IF NOT EXISTS record_people (
+    record_id VARCHAR,
+    siape VARCHAR,
+    family VARCHAR,
+    ordinal BIGINT,
+    name VARCHAR,
+    normalized_name VARCHAR,
+    cnpq_id VARCHAR,
+    role VARCHAR,
+    year BIGINT
+);
+
+CREATE TABLE IF NOT EXISTS record_builds (
+    build_id VARCHAR PRIMARY KEY,
+    fingerprint VARCHAR,
+    stats_json VARCHAR,
+    created_at VARCHAR
+);
+"""
+
+# ---------------------------------------------------------------------------
 # The entity graph
 # ---------------------------------------------------------------------------
 
@@ -453,7 +512,7 @@ class Database:
             # Derived tables are disposable by definition; acquired and outreach
             # tables hold state and are never dropped here.
             report["rebuilt"] = _reconcile_derived(con, existing)
-            for block in (ACQUIRED_SCHEMA, DERIVED_SCHEMA, GRAPH_SCHEMA,
+            for block in (ACQUIRED_SCHEMA, DERIVED_SCHEMA, RECORDS_SCHEMA, GRAPH_SCHEMA,
                           PROFESSOR_METRICS_SCHEMA, OUTREACH_SCHEMA):
                 con.execute(block)
             # A populated outreach table is never dropped, so it can only gain
@@ -526,7 +585,7 @@ def _declared_columns(*blocks: str) -> dict[str, tuple[str, ...]]:
     return out
 
 
-DERIVED_TABLES = _declared_columns(DERIVED_SCHEMA, GRAPH_SCHEMA, PROFESSOR_METRICS_SCHEMA)
+DERIVED_TABLES = _declared_columns(DERIVED_SCHEMA, RECORDS_SCHEMA, GRAPH_SCHEMA, PROFESSOR_METRICS_SCHEMA)
 OUTREACH_TABLES = _declared_columns(OUTREACH_SCHEMA)
 
 
