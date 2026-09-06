@@ -16,7 +16,7 @@ import {
 } from '@tanstack/react-query';
 import type {
   AppState, CampaignDetail, EnginePayload, LandscapePayload, NetworkPayload,
-  OpportunitiesPayload, OutcomeResult, PlanDetail, ProfessorDetail,
+  OpportunitiesPayload, OutcomeResult, PipelinePayload, PlanDetail, ProfessorDetail,
   ProfessorsPayload, ThreadState,
 } from './types';
 
@@ -40,6 +40,18 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
 
 /** Corpus payloads never change while the page is open; outcomes do. */
 const STATIC_QUERY = { staleTime: Infinity, gcTime: Infinity } as const;
+
+/* Freshness is the one payload whose point is to have changed since the page
+ * opened: somebody runs `pulsar pipeline run` in another window and the numbers
+ * on every other screen quietly become the previous answer. So it is not
+ * STATIC_QUERY — it re-fetches when the tab is looked at again. */
+export function usePipeline() {
+  return useQuery({
+    queryKey: ['pipeline'],
+    queryFn: () => fetchJson<PipelinePayload>('/api/pipeline'),
+    staleTime: 30_000,
+  });
+}
 
 export function useAppState(): UseQueryResult<AppState> {
   return useQuery({ queryKey: ['state'], queryFn: () => fetchJson<AppState>('/api/state') });

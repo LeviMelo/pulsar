@@ -226,6 +226,11 @@ npm run build      # rebuild ../static — commit the result
 Run `pulsar dashboard` in another terminal while `npm run dev` is up: the dev
 server proxies the API to it, so both halves are live at once.
 
+The **Semantic engine** screen has a *Freshness* tab: every pipeline stage, its
+state, and what re-running it would invalidate — the same table `pulsar pipeline
+status` prints. The console shows it and never runs it; acquisition stays at a
+terminal behind `--acquire`.
+
 ### As a window rather than a tab
 
 ```powershell

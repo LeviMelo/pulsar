@@ -108,6 +108,11 @@ class Console:
                 self.db, mode, display_name=self.payloads.display_name))
         if parts == ["api", "engine"]:
             return self.cache.get("engine", self.payloads.engine)
+        if parts == ["api", "pipeline"]:
+            # Deliberately uncached. Freshness is the one payload whose whole
+            # point is to have changed since the page was opened — a `pulsar
+            # pipeline run` in another window must show up on a reload.
+            return self.payloads.pipeline()
         if len(parts) == 3 and parts[:2] == ["api", "opportunity"]:
             return self.payloads.opportunity(parts[2]) or _missing("work plan", parts[2])
         if len(parts) == 3 and parts[:2] == ["api", "professor"]:

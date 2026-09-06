@@ -72,9 +72,30 @@ def test_records_keeps_only_requested_columns_that_exist():
 def test_every_payload_survives_strict_json(console):
     """`json.dumps(..., allow_nan=False)` is what the server actually calls, and
     a stray NaN there is a 500 the browser reports as a blank page."""
-    for name in ("state", "opportunities", "professors", "engine"):
+    for name in ("state", "opportunities", "professors", "engine", "pipeline"):
         json.dumps(getattr(console.payloads, name)(), allow_nan=False)
     json.dumps(console.payloads.landscape("domain"), allow_nan=False)
+
+
+def test_the_freshness_payload_reports_every_declared_stage(console):
+    """The console never runs the pipeline; it has to be able to *show* it."""
+    from pulsar_research.pipeline import STAGES
+    stages = console.payloads.pipeline()["stages"]
+    from pulsar_research.pipeline import order
+    # Dependency order, so the table reads top to bottom the way the build runs.
+    assert [row["stage"] for row in stages] == [stage.name for stage in order()]
+    assert {row["stage"] for row in stages} == {stage.name for stage in STAGES}
+    for row in stages:
+        assert row["state"] in ("ok", "stale", "never", "blocked", "unknown")
+        assert row["why"], f"{row['stage']} does not say what it is for"
+
+
+def test_freshness_is_never_served_from_the_cache(console):
+    """It is the one payload whose whole point is to have changed since the
+    page was opened; caching it would make the console confidently stale about
+    staleness."""
+    console.get("/api/pipeline", {})
+    assert not any("pipeline" in key for key in console.cache._entries)
 
 
 # --------------------------------------------------------------- routing

@@ -4,8 +4,8 @@
 > **Operator:** Levi de Melo Amorim (FAMED/UFAL)
 > **Repository:** `C:\Users\Galaxy\LEVI\projects\pulsar`
 > **Environment:** conda env `pegasus` (Python 3.11), Windows 11, RTX 4060 6 GB
-> **Engine version:** semantic engine 3.0.0 · DuckDB schema 3
-> **Last substantial revision:** 2026-09-04 (takeover, audit, semantic redesign)
+> **Engine version:** semantic engine 3.0.0 · DuckDB schema 4
+> **Last substantial revision:** 2026-09-06 (entity graph, build pipeline, outreach demoted to an application)
 
 This is the single source of truth for what PULSAR is, how it is built, why it is
 built that way, what is known to be wrong with it, and what to do next. It
@@ -1008,12 +1008,19 @@ screen keeps its state in the URL, so a view is linkable and survives a reload.
   inline, and a rail whose field and technique bars double as the filters that
   isolate them.
 - **Network** — the faculty as a graph, over three switchable edge semantics
-  (co-authorship, shared technique, shared subject) that disagree in useful ways.
-  Detail in §17.1.
+  (co-authorship, shared technique, shared subject) that disagree in useful ways,
+  read from the entity graph and carrying its structural measures. Detail
+  in §17.1.
 - **Outreach** — audiences, per-recipient drafts, and the state of every
   conversation. It never sends: that stays at a terminal, behind `--confirm`.
 - **Semantic engine** — benchmarks (with a plain-language note per task), map
-  fidelity, topic-quality curves over k, and both provenance identities.
+  fidelity, topic-quality curves over k, both provenance identities, and
+  **freshness**: every declared pipeline stage, its state, why, and what
+  re-running it would invalidate. Six screens report numbers derived from a
+  store somebody scraped at some point; until this tab existed, "is this the
+  ranking from before or after the last sync" was answered by remembering. The
+  console shows it and never runs it — a scrape a browser tab can start is an
+  accident waiting to happen, which is why `--acquire` is a terminal flag.
 
 `pulsar dashboard --window` draws the same pages in the OS webview instead of a
 browser tab (`webapp/desktop.py`, optional `desktop` extra). Nothing in the front

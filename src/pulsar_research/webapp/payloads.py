@@ -222,6 +222,18 @@ class Payloads:
             "topic_quality": topic_quality,
         }
 
+    def pipeline(self) -> dict[str, Any]:
+        """Every declared stage and whether it is still current.
+
+        The console cannot run the pipeline — a scrape from a page a browser tab
+        can trigger is exactly the kind of accident the `--acquire` flag exists
+        to prevent — so this reads and says what to type. What it removes is the
+        need to guess whether the numbers on the other six screens were computed
+        before or after the last acquisition.
+        """
+        from ..pipeline import status
+        return {"stages": status(self.db)}
+
     # -- details ----------------------------------------------------------
 
     def opportunity(self, oid: str) -> dict[str, Any]:

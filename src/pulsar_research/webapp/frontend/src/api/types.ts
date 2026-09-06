@@ -297,3 +297,21 @@ export interface EnginePayload {
   map: Record<string, number>;
   topic_quality: Record<string, TopicQuality>;
 }
+
+export type StageState = 'ok' | 'stale' | 'never' | 'blocked' | 'unknown';
+
+export interface PipelineStage {
+  stage: string;
+  title: string;
+  why: string;
+  state: StageState;
+  detail: string;
+  at?: string | null;
+  acquires: boolean;
+  depends_on: string[];
+  blocks: string[];
+}
+
+export interface PipelinePayload {
+  stages: PipelineStage[];
+}
